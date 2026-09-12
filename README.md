@@ -32,6 +32,10 @@ El servidor escucha en `0.0.0.0:47321`.
 
 Matriz: [`docs/RFP_COMPLIANCE.md`](docs/RFP_COMPLIANCE.md). Biometría: [`docs/BIOMETRIA.md`](docs/BIOMETRIA.md). Salida: [`docs/EXIT_PLAN.md`](docs/EXIT_PLAN.md). Plantillas: [`docs/CONTRACT_TEMPLATES.md`](docs/CONTRACT_TEMPLATES.md).
 
+## Roadmap
+
+IA (briefing, chat, anomalías) queda en backlog y no se implementa en esta oferta: [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md).
+
 ## Kiosco en LAN (tablet o Pi)
 
 1. `npm run dev` en el host.
