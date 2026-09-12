@@ -196,12 +196,31 @@ paths:
       responses:
         "200":
           description: ok
-  /api/events:
+  /api/audit:
     get:
-      summary: Bitácora estilo webhook
+      summary: Bitácora de auditoría
       responses:
         "200":
-          description: Eventos persistidos (sin entrega HMAC en el DEMO)
+          description: Eventos (webhook HMAC opcional vía WEBHOOK_URL)
+  /api/employees/{id}:
+    patch:
+      summary: Activar/desactivar o revocar consentimiento
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active: { type: boolean }
+                revokeConsent: { type: boolean }
+      responses:
+        "200":
+          description: Empleado actualizado
   /api/openapi:
     get:
       summary: Esta especificación

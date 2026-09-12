@@ -1,5 +1,11 @@
 import { requireAdmin } from "@/lib/auth";
-import { addTemplates, getEmployee, listTemplates, setEmployeeConsent } from "@/lib/db";
+import {
+  addTemplates,
+  getEmployee,
+  listTemplates,
+  setEmployeeConsent,
+  wipeTemplates,
+} from "@/lib/db";
 import { badRequest, json, parseJson, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -41,4 +47,17 @@ export async function POST(
   } catch (error) {
     return serverError(error);
   }
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+  const { id } = await context.params;
+  const employee = getEmployee(id);
+  if (!employee) return json({ error: "No encontrado" }, 404);
+  wipeTemplates(employee.id);
+  return json({ ok: true, employee: getEmployee(employee.id) });
 }

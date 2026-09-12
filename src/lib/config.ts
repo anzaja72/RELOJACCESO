@@ -2,7 +2,7 @@ export const APP = {
   name: "Reloj CR",
   rfp: "RFP-BIO-2026-01",
   country: "Costa Rica",
-  tagline: "PoC de asistencia biométrica para restaurantes",
+  tagline: "Asistencia biométrica para restaurantes — DEMO RFP",
 } as const;
 
 export const MATCH_THRESHOLD = 0.48;

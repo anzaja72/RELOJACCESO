@@ -1,0 +1,8 @@
+---
+description: graphify knowledge graph context
+alwaysApply: true
+---
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Prefer `graphify path`, `graphify explain`, or reading `graphify-out/GRAPH_REPORT.md` before wide Grep. After modifying code files, run `graphify update . --force --no-cluster` (AST-only).

@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ulid } from "ulidx";
 import { LogIn, LogOut, UserRoundX } from "lucide-react";
-import { DemoBanner } from "@/components/demo-banner";
-import { NavLinks } from "@/components/nav-links";
+import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
 import { SitePicker } from "@/components/site-picker";
 import { WebcamPanel } from "@/components/webcam-panel";
@@ -280,79 +279,65 @@ export function KioskClient() {
   }
 
   return (
-    <div className="kiosk-skin">
-      <DemoBanner />
-      <NavLinks tone="dark" />
-      <main className="kiosk-main">
-        <section className="kiosk-top">
-          <div>
-            <p className="eyebrow">Marcación facial</p>
-            <h1>
-              {site
-                ? site.name
-                : loadError
-                  ? "Sin sede"
-                  : "Cargando sede…"}
-            </h1>
-            <p className="muted">
-              {clock} · {enrolledCount} plantillas en {site?.city ?? "…"}
-              {loadError ? ` · ${loadError}` : ""}
-            </p>
-          </div>
-          <div className="kiosk-tools">
-            <OfflineBadge online={online} queued={queued} syncing={syncing} />
-            {sites.length > 0 && (
-              <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
-            )}
-          </div>
-        </section>
-
-        <div className="kiosk-grid" ref={cameraRoot}>
+    <AppShell
+      title={site ? site.name : loadError ? "Sin sede" : "Cargando sede…"}
+      meta={`${clock} · ${enrolledCount} plantillas${loadError ? ` · ${loadError}` : ""}`}
+      actions={
+        <>
+          <OfflineBadge online={online} queued={queued} syncing={syncing} />
+          {sites.length > 0 && (
+            <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
+          )}
+        </>
+      }
+    >
+      <div className="split">
+        <div className="detail" ref={cameraRoot}>
           <WebcamPanel
             ready={modelsReady}
             onReadyChange={setModelsReady}
             error={cameraError}
             onError={setCameraError}
-            hint="Coloque el rostro en el óvalo"
+            hint="Rostro en el óvalo"
           />
-          <aside className="kiosk-actions">
+          <div className="punch-row">
             <button
-              className="punch-btn in"
+              className="punch-btn in shade"
               disabled={busy || !modelsReady}
               onClick={() => void punch("IN")}
             >
-              <LogIn className="size-8" />
+              <LogIn className="size-4" />
               Entrada
             </button>
             <button
-              className="punch-btn out"
+              className="punch-btn out shade"
               disabled={busy || !modelsReady}
               onClick={() => void punch("OUT")}
             >
-              <LogOut className="size-8" />
+              <LogOut className="size-4" />
               Salida
             </button>
-            <p className="kiosk-help">
-              El cruce se hace en el navegador. Si cae la red, la marcación
-              queda en IndexedDB y no se pierde.
-            </p>
-          </aside>
+          </div>
         </div>
-      </main>
-
+        <div className="detail">
+          <h2>Marcación</h2>
+          <p>
+            El cruce es local. Sin red, la ULID queda en IndexedDB y se
+            sincroniza al volver.
+          </p>
+        </div>
+      </div>
       {result && (
         <div className={`result-overlay ${result.tone}`} role="alertdialog">
           {result.tone === "bad" ? (
-            <UserRoundX className="size-14" />
-          ) : result.tone === "ok" ? (
-            <LogIn className="size-14" />
+            <UserRoundX className="size-8" />
           ) : (
-            <LogOut className="size-14" />
+            <LogIn className="size-8" />
           )}
           <h2>{result.title}</h2>
           <p>{result.detail}</p>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 }

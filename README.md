@@ -1,5 +1,7 @@
 # Reloj CR — DEMO de asistencia biométrica (RFP-BIO-2026-01)
 
+Versión de operación (Spec Kit + Ponytail + Graphify): UI tipo bandeja, auditoría, revocación de consentimiento, rate limit y webhook HMAC opcional. Sigue siendo un **DEMO**.
+
 PoC de **kiosco + enrolamiento + dashboard** para restaurantes en Costa Rica. Corre en **cualquier navegador moderno** (Chrome en tablet Android, Chromium en Raspberry Pi, laptop). No hay Electron, ni agente exclusivo de Pi, ni SDK USB de huella.
 
 La cámara usa `getUserMedia`. El matching facial corre **en el navegador** (`@vladmandic/face-api` / TinyFaceDetector + FaceRecognitionNet). SQLite guarda sedes, colaboradores, plantillas y marcaciones. IndexedDB guarda la **cola offline**.
@@ -44,10 +46,11 @@ chromium-browser --kiosk --use-fake-ui-for-media-stream http://IP:47321/kiosk?si
 | `/` | Entrada del PoC |
 | `/kiosk` o `/kiosk?site=R01` | Marcación a pantalla completa: **Entrada** / **Salida** |
 | `/enroll` | Alta + 2–3 muestras + consentimiento |
-| `/admin` | Presentes/ausentes, feed en vivo, terminales, CSV |
-| `/openapi.yaml` y `/api/openapi` | Contrato REST |
+| `/admin` | Operación: lista + detalle, presentes, CSV |
+| `/audit` | Bitácora |
+| `/docs` y `/openapi.yaml` | API REST |
 
-Etiquetas de operador en español: Marcación, Entrada, Salida, Enrolar, Dashboard.
+Etiquetas: Marcación, Entrada, Salida, Enrolar, Operación.
 
 ## Datos semilla
 
@@ -78,7 +81,9 @@ Si cae la red **no se pierde** la marcación: o viaja al servidor o queda en col
 
 Público (kiosco): `GET /api/sites`, `GET /api/employees`, `GET /api/templates`, `POST /api/identify`, `POST /api/punches`, `POST /api/sync`, `POST /api/terminals/heartbeat`, `GET /api/health`.
 
-Admin (token): `POST /api/employees`, `POST /api/employees/{id}/templates`, `GET /api/punches/export`, `GET /api/events`.
+Admin (token): `POST /api/employees`, `PATCH /api/employees/{id}`, `DELETE /api/employees/{id}/templates`, `GET /api/punches/export`, `GET /api/audit`.
+
+Proceso: constitución en `.specify/memory/constitution.md`, spec en `specs/001-enterprise-ops/`. Grafo: `graphify-out/`. Reglas: `.cursor/rules/ponytail.mdc`.
 
 `POST /api/identify` sigue la forma verify/identify: `{ descriptor[128], siteId }` → `{ decision, employee, score }`. El kiosco **prioriza el cruce local** para seguir funcionando offline.
 

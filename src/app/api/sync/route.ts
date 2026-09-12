@@ -1,11 +1,13 @@
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { recentDuplicate, upsertPunch } from "@/lib/db";
-import { badRequest, json, parseJson, serverError } from "@/lib/http";
+import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import type { SyncItem } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, 30);
+  if (limited) return limited;
   try {
     const body = await parseJson<{ punches?: SyncItem[] }>(request);
     const items = body.punches ?? [];

@@ -1,6 +1,6 @@
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
-import { badRequest, json, parseJson, serverError } from "@/lib/http";
+import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import type { SyncItem } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,6 +19,8 @@ export function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request);
+  if (limited) return limited;
   try {
     const body = await parseJson<Partial<SyncItem> & { offline?: boolean }>(
       request,

@@ -95,6 +95,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  patchEmployee: (
+    id: string,
+    body: { active?: boolean; revokeConsent?: boolean },
+  ) =>
+    request<{ employee: Employee }>(`/api/employees/${id}`, {
+      method: "PATCH",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  wipeTemplates: (id: string) =>
+    request<{ ok: boolean; employee: Employee }>(`/api/employees/${id}/templates`, {
+      method: "DELETE",
+      admin: true,
+    }),
+  audit: () =>
+    request<{ events: Array<{ id: string; type: string; payload: unknown; created_at: string }> }>(
+      "/api/audit",
+      { admin: true },
+    ),
   health: () =>
     request<{
       ok: boolean;

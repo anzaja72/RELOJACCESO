@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Download, Radio } from "lucide-react";
-import { DemoBanner } from "@/components/demo-banner";
-import { NavLinks } from "@/components/nav-links";
+import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
 import { SitePicker } from "@/components/site-picker";
 import { Button } from "@/components/ui/button";
@@ -20,7 +18,8 @@ export default function AdminPage() {
   const [online, setOnline] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updatedAt, setUpdatedAt] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
@@ -56,14 +55,7 @@ export default function AdminPage() {
         setRows(data.rows);
         setPunches(data.punches);
         setTerminals(data.terminals.filter((t) => t.siteId === siteId || !siteId));
-        setUpdatedAt(
-          new Intl.DateTimeFormat("es-CR", {
-            timeZone: "America/Costa_Rica",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          }).format(new Date()),
-        );
+        setSelectedId((id) => id ?? data.punches[0]?.id ?? null);
         setError(null);
         setLoading(false);
       } catch (err) {
@@ -82,11 +74,14 @@ export default function AdminPage() {
   }, [siteId]);
 
   const present = rows.filter((r) => r.status === "present").length;
-  const enrolled = rows.filter((r) => r.employee.enrolled).length;
-  const siteTerminals = useMemo(
-    () => terminals.filter((t) => !siteId || t.siteId === siteId),
-    [terminals, siteId],
-  );
+  const selected = punches.find((p) => p.id === selectedId) ?? null;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return punches;
+    return punches.filter((p) =>
+      `${p.employeeName} ${p.employeeCode} ${p.type} ${p.decision}`.toLowerCase().includes(q),
+    );
+  }, [punches, query]);
 
   async function exportCsv() {
     const url = `/api/punches/export?site=${encodeURIComponent(siteId)}`;
@@ -105,135 +100,112 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="paper-skin">
-      <DemoBanner />
-      <NavLinks />
-      <main className="page-wrap">
-        <header className="page-hero">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h1>Operación de hoy</h1>
-            <p>
-              Feed en vivo (cada 3 s). Token demo en la exportación CSV.
-              {updatedAt ? ` Actualizado ${updatedAt}` : ""}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <OfflineBadge online={online} queued={0} />
-            {sites.length > 0 && (
-              <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
-            )}
-            <Button className="min-h-12" onClick={() => void exportCsv()}>
-              <Download className="size-4" />
-              Exportar CSV
-            </Button>
-          </div>
-        </header>
-
-        {error && <p className="err-text">{error}</p>}
-        {loading && <p className="muted">Cargando tablero…</p>}
-
-        <section className="stat-grid">
-          <article className="stat-card">
-            <span>Presentes</span>
-            <strong>{present}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Ausentes</span>
-            <strong>{rows.length - present}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Enrolados</span>
-            <strong>{enrolled}</strong>
-          </article>
-          <article className="stat-card">
-            <span>Marcaciones</span>
-            <strong>{punches.length}</strong>
-          </article>
-        </section>
-
-        <div className="admin-grid">
-          <section className="panel">
-            <h2>Feed de marcaciones</h2>
-            {punches.length === 0 ? (
-              <p className="empty-state">
-                Aún no hay marcaciones. Abra el kiosco, enrolé un rostro y
-                pulse Entrada.
-              </p>
-            ) : (
-              <ol className="feed">
-                {punches.map((punch) => (
-                  <li key={punch.id}>
-                    <b className={punch.type === "IN" ? "in" : "out"}>
-                      {punch.type === "IN" ? "Entrada" : "Salida"}
-                    </b>
-                    <span>
-                      {punch.employeeName || "Desconocido"}{" "}
-                      {punch.employeeCode ? `· ${punch.employeeCode}` : ""}
-                    </span>
-                    <small>
-                      {new Date(punch.capturedAt).toLocaleTimeString("es-CR")} ·{" "}
-                      {punch.decision}
-                      {punch.offline ? " · sync" : ""}
-                    </small>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-
-          <section className="panel">
-            <h2>Presentes / ausentes</h2>
-            <ul className="people-list">
-              {rows.map((row) => (
-                <li key={row.employee.id}>
-                  <div>
-                    <strong>{row.employee.name}</strong>
-                    <span>
-                      {row.employee.code} · {row.employee.role}
-                    </span>
-                  </div>
-                  <em className={row.status === "present" ? "ok-text" : "muted"}>
-                    {row.status === "present" ? "Presente" : "Ausente"}
-                  </em>
-                </li>
-              ))}
-              {rows.length === 0 && !loading && (
-                <li className="muted">Sin colaboradores en esta sede.</li>
-              )}
-            </ul>
-          </section>
-        </div>
-
-        <section className="panel">
-          <h2 className="flex items-center gap-2">
-            <Radio className="size-4" />
-            Terminales
-          </h2>
-          {siteTerminals.length === 0 ? (
-            <p className="empty-state">
-              Ningún kiosco ha enviado heartbeat. Abra /kiosk en una tablet o
-              en el Pi.
-            </p>
-          ) : (
-            <ul className="terminal-list">
-              {siteTerminals.map((terminal) => (
-                <li key={terminal.id}>
-                  <span className={terminal.online ? "dot on" : "dot off"} />
-                  <div>
-                    <strong>{terminal.label}</strong>
-                    <small>
-                      {terminal.online ? "En línea" : "Silencio"} ·{" "}
-                      {terminal.path} ·{" "}
-                      {new Date(terminal.lastSeen).toLocaleTimeString("es-CR")}
-                    </small>
-                  </div>
-                </li>
-              ))}
-            </ul>
+    <AppShell
+      title="Operación"
+      meta={`${present} presentes · ${rows.length - present} ausentes · ${punches.length} marcaciones`}
+      actions={
+        <>
+          <input
+            className="search"
+            placeholder="Buscar"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <OfflineBadge online={online} queued={0} />
+          {sites.length > 0 && (
+            <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
           )}
-        </section>
-      </main>
-    </div>
+          <Button className="shade" onClick={() => void exportCsv()}>
+            Exportar CSV
+          </Button>
+        </>
+      }
+    >
+      {error && <p className="err-text" style={{ padding: "12px 22px" }}>{error}</p>}
+      <div className="split">
+        <div className="split-list">
+          {loading && <p className="empty">Cargando…</p>}
+          {!loading &&
+            filtered.map((punch) => (
+              <button
+                key={punch.id}
+                type="button"
+                className={`row shade ${selectedId === punch.id ? "active" : ""}`}
+                onClick={() => setSelectedId(punch.id)}
+              >
+                <strong>
+                  {punch.employeeName || "Desconocido"} ·{" "}
+                  {punch.type === "IN" ? "Entrada" : "Salida"}
+                </strong>
+                <span>
+                  {new Date(punch.capturedAt).toLocaleTimeString("es-CR")} ·{" "}
+                  {punch.decision}
+                </span>
+                <div className="tags">
+                  {punch.employeeCode ? <span className="pill">{punch.employeeCode}</span> : null}
+                  {punch.offline ? <span className="pill">sync</span> : null}
+                </div>
+              </button>
+            ))}
+          {!loading && filtered.length === 0 && (
+            <p className="empty">Sin marcaciones en esta sede.</p>
+          )}
+        </div>
+        <div className="detail">
+          {selected ? (
+            <>
+              <h2>{selected.employeeName || "Desconocido"}</h2>
+              <p>
+                {selected.type === "IN" ? "Entrada" : "Salida"} · {selected.decision}
+              </p>
+              <dl className="kv">
+                <div>
+                  <dt>Código</dt>
+                  <dd>{selected.employeeCode || "—"}</dd>
+                </div>
+                <div>
+                  <dt>Capturado</dt>
+                  <dd>{new Date(selected.capturedAt).toLocaleString("es-CR")}</dd>
+                </div>
+                <div>
+                  <dt>Score</dt>
+                  <dd>{selected.matchScore ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Terminal</dt>
+                  <dd>{selected.terminalId}</dd>
+                </div>
+                <div>
+                  <dt>ULID</dt>
+                  <dd style={{ fontSize: 11 }}>{selected.id}</dd>
+                </div>
+              </dl>
+            </>
+          ) : (
+            <p className="empty">Seleccione una marcación.</p>
+          )}
+          <h2 style={{ marginTop: 28, fontSize: 14 }}>Plantilla</h2>
+          {rows.map((row) => (
+            <div key={row.employee.id} className="row" style={{ padding: "10px 0" }}>
+              <strong>{row.employee.name}</strong>
+              <span>
+                {row.employee.code} · {row.status === "present" ? "Presente" : "Ausente"}
+              </span>
+            </div>
+          ))}
+          <h2 style={{ marginTop: 20, fontSize: 14 }}>Terminales</h2>
+          {terminals.length === 0 && <p className="muted">Ningún heartbeat aún.</p>}
+          {terminals.map((t) => (
+            <div key={t.id} className="row" style={{ padding: "10px 0" }}>
+              <strong>{t.label}</strong>
+              <span>
+                {t.online ? "En línea" : "Silencio"} ·{" "}
+                {new Date(t.lastSeen).toLocaleTimeString("es-CR")}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </AppShell>
   );
 }

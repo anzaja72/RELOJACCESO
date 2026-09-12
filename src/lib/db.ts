@@ -3,6 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { ulid } from "ulidx";
 import { TERMINAL_ONLINE_MS } from "@/lib/config";
+import { dispatchWebhook } from "@/lib/webhook";
 import type {
   AttendanceRow,
   Employee,
@@ -188,6 +189,7 @@ function recordEvent(db: Database.Database, type: string, payload: unknown) {
   db.prepare(
     "INSERT INTO events (id, type, payload, created_at) VALUES (?, ?, ?, ?)",
   ).run(ulid(), type, JSON.stringify(payload), new Date().toISOString());
+  dispatchWebhook(type, payload);
 }
 
 function mapEmployee(row: Record<string, unknown>): Employee {
@@ -295,6 +297,32 @@ export function setEmployeeConsent(id: string, consentAt: string) {
   getDb()
     .prepare("UPDATE employees SET consent_at = ? WHERE id = ?")
     .run(consentAt, id);
+}
+
+export function patchEmployee(
+  id: string,
+  patch: { active?: boolean; revokeConsent?: boolean },
+) {
+  const current = getEmployee(id);
+  if (!current) throw new Error("Colaborador no encontrado");
+  if (patch.active !== undefined) {
+    getDb()
+      .prepare("UPDATE employees SET active = ? WHERE id = ?")
+      .run(patch.active ? 1 : 0, id);
+    recordEvent(getDb(), "employee.updated", { id, active: patch.active });
+  }
+  if (patch.revokeConsent) {
+    getDb().prepare("UPDATE employees SET consent_at = NULL WHERE id = ?").run(id);
+    getDb().prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
+    recordEvent(getDb(), "consent.revoked", { id });
+  }
+  return getEmployee(id)!;
+}
+
+export function wipeTemplates(employeeId: string) {
+  if (!getEmployee(employeeId)) throw new Error("Colaborador no encontrado");
+  getDb().prepare("DELETE FROM face_templates WHERE employee_id = ?").run(employeeId);
+  recordEvent(getDb(), "template.wiped", { employeeId });
 }
 
 export function listTemplates(siteId?: string): FaceTemplate[] {

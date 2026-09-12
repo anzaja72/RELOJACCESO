@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
-import { DemoBanner } from "@/components/demo-banner";
-import { NavLinks } from "@/components/nav-links";
+import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
 import { SitePicker } from "@/components/site-picker";
 import { WebcamPanel } from "@/components/webcam-panel";
@@ -161,118 +160,109 @@ export default function EnrollPage() {
     }
   }
 
+  async function revoke() {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      await api.patchEmployee(selectedId, { revokeConsent: true });
+      const refreshed = await api.employees(siteId);
+      setEmployees(refreshed.employees);
+      setConsent(false);
+      setStatus("Consentimiento revocado. Plantillas borradas.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo revocar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="paper-skin">
-      <DemoBanner />
-      <NavLinks />
-      <main className="page-wrap">
-        <header className="page-hero">
-          <div>
-            <p className="eyebrow">Enrolar</p>
-            <h1>Alta biométrica de colaborador</h1>
-            <p>
-              Se guardan solo descriptores numéricos (128 valores), no fotos.
-              Consentimiento explícito obligatorio. {site?.name ?? ""}
-            </p>
-          </div>
+    <AppShell
+      title="Enrolar"
+      meta={`Descriptores, no fotos. ${site?.name ?? ""}`}
+      actions={
+        <>
           <OfflineBadge online={online} queued={0} />
-        </header>
-
-        <div className="enroll-grid">
-          <section className="panel" ref={cameraRoot}>
-            <WebcamPanel
-              ready={modelsReady}
-              onReadyChange={setModelsReady}
-              error={cameraError}
-              onError={setCameraError}
-              hint={`${samples.length}/${ENROLL_SAMPLES} muestras`}
-            />
-            <div className="sample-row">
-              {Array.from({ length: ENROLL_SAMPLES }).map((_, i) => (
-                <div key={i} className={`sample-slot ${samples[i] ? "done" : ""}`}>
-                  {samples[i] ? <Check className="size-5" /> : i + 1}
-                </div>
-              ))}
-              <Button
-                className="min-h-12 flex-1 text-base"
-                onClick={() => void captureSample()}
-                disabled={!modelsReady || samples.length >= ENROLL_SAMPLES}
+          {sites.length > 0 && (
+            <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
+          )}
+        </>
+      }
+    >
+      <div className="split">
+        <div className="split-list">
+          {!listReady && <p className="empty">Cargando…</p>}
+          {listReady &&
+            employees.map((employee) => (
+              <button
+                key={employee.id}
+                type="button"
+                className={`row shade ${selectedId === employee.id ? "active" : ""}`}
+                onClick={() => pickEmployee(employee)}
               >
-                Capturar muestra
-              </Button>
-              <Button
-                variant="outline"
-                className="min-h-12"
-                onClick={() => setSamples([])}
-                disabled={samples.length === 0}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          </section>
-
-          <section className="panel form-panel">
-            {sites.length > 0 && (
-              <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
-            )}
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="name">Nombre</Label>
-                <Input
-                  id="name"
-                  className="min-h-12 text-base"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="María Solís"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="code">Código</Label>
-                  <Input
-                    id="code"
-                    className="min-h-12 text-base"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    placeholder="MES-014"
-                  />
+                <strong>{employee.name}</strong>
+                <span>
+                  {employee.code} · {employee.role}
+                </span>
+                <div className="tags">
+                  <span className="pill">
+                    {employee.enrolled
+                      ? `${employee.templateCount} plantillas`
+                      : "Sin enrolar"}
+                  </span>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="role">Puesto</Label>
-                  <Input
-                    id="role"
-                    className="min-h-12 text-base"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                  />
-                </div>
+              </button>
+            ))}
+          {listReady && employees.length === 0 && (
+            <p className="empty">No hay colaboradores en esta sede.</p>
+          )}
+        </div>
+        <div className="detail" ref={cameraRoot}>
+          <WebcamPanel
+            ready={modelsReady}
+            onReadyChange={setModelsReady}
+            error={cameraError}
+            onError={setCameraError}
+            hint={`${samples.length}/${ENROLL_SAMPLES} muestras`}
+          />
+          <div className="sample-row">
+            {Array.from({ length: ENROLL_SAMPLES }).map((_, i) => (
+              <div key={i} className={`sample-slot ${samples[i] ? "done" : ""}`}>
+                {samples[i] ? <Check className="size-3.5" /> : i + 1}
               </div>
+            ))}
+            <Button
+              className="shade"
+              onClick={() => void captureSample()}
+              disabled={!modelsReady || samples.length >= ENROLL_SAMPLES}
+            >
+              Capturar
+            </Button>
+            <Button variant="outline" className="shade" onClick={() => setSamples([])}>
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+          <div className="form" style={{ marginTop: 16 }}>
+            <Label htmlFor="name">Nombre</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="María Solís" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Código" />
+              <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Puesto" />
             </div>
-
             <label className="consent-box">
-              <Checkbox
-                checked={consent}
-                onCheckedChange={(value) => setConsent(Boolean(value))}
-              />
+              <Checkbox checked={consent} onCheckedChange={(value) => setConsent(Boolean(value))} />
               <span>
-                Autorizo el tratamiento de mi plantilla facial para control de
-                asistencia (Ley 8968, demo {site?.city ?? "CR"}). Entiendo que
-                este DEMO no cifra las plantillas con E2EE de producción y que
-                no se guardan fotografías, solo vectores.
+                Autorizo el tratamiento de mi plantilla facial (Ley 8968). DEMO:
+                sin E2EE productivo. No se guardan fotos.
               </span>
             </label>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="min-h-12 flex-1 text-base"
-                onClick={() => void save()}
-                disabled={saving}
-              >
-                Guardar plantillas
+            <div className="flex flex-wrap gap-2">
+              <Button className="shade" onClick={() => void save()} disabled={saving}>
+                Guardar
               </Button>
               <Button
                 variant="outline"
-                className="min-h-12"
+                className="shade"
                 onClick={() => {
                   setSelectedId("");
                   setName("");
@@ -285,44 +275,17 @@ export default function EnrollPage() {
                 <Plus className="size-4" />
                 Nuevo
               </Button>
+              {selectedId ? (
+                <Button variant="outline" className="shade" onClick={() => void revoke()} disabled={saving}>
+                  Revocar
+                </Button>
+              ) : null}
             </div>
             {status && <p className="ok-text">{status}</p>}
             {error && <p className="err-text">{error}</p>}
-          </section>
+          </div>
         </div>
-
-        <section className="panel">
-          <h2>Colaboradores de la sede</h2>
-          <p className="muted mb-3">
-            Los registros semilla no tienen cara. Enrolar con la webcam de esta
-            tablet o del Pi.
-          </p>
-          <ul className="people-list">
-            {!listReady && (
-              <li className="muted">Cargando colaboradores…</li>
-            )}
-            {listReady &&
-              employees.map((employee) => (
-                <li key={employee.id}>
-                  <button type="button" onClick={() => pickEmployee(employee)}>
-                    <strong>{employee.name}</strong>
-                    <span>
-                      {employee.code} · {employee.role}
-                    </span>
-                  </button>
-                  <em className={employee.enrolled ? "ok-text" : "muted"}>
-                    {employee.enrolled
-                      ? `${employee.templateCount} plantillas`
-                      : "Sin enrolar"}
-                  </em>
-                </li>
-              ))}
-            {listReady && employees.length === 0 && (
-              <li className="muted">No hay colaboradores en esta sede.</li>
-            )}
-          </ul>
-        </section>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
