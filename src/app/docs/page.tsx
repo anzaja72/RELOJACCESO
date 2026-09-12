@@ -2,21 +2,23 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 
 const routes = [
-  ["GET", "/api/health", "Salud y terminales"],
-  ["GET", "/api/sites", "Sedes"],
-  ["GET", "/api/employees?site=R01", "Colaboradores"],
-  ["PATCH", "/api/employees/{id}", "Activo / revocar consentimiento"],
-  ["DELETE", "/api/employees/{id}/templates", "Borrar plantillas"],
-  ["POST", "/api/identify", "1:N"],
-  ["POST", "/api/punches", "Marcación ULID"],
+  ["GET", "/api/v1", "Versión, edición, sandbox"],
+  ["POST", "/api/v1/auth/login", "JWT (email + clave + TOTP opcional)"],
+  ["GET", "/api/v1/catalog", "Países, zonas, sedes, tipos de evento"],
+  ["GET", "/api/v1/punches?since=&cursor=", "Incremental autenticado"],
+  ["GET", "/api/v1/punches/stream", "SSE cada 4 s"],
+  ["POST", "/api/v1/punches/pin", "Respaldo supervisor + motivo"],
+  ["GET", "/api/v1/reports", "Novedades del día"],
+  ["GET", "/api/v1/exports/pack", "JSON / CSV / XLSX / PDF / ZIP"],
+  ["POST", "/api/v1/corrections", "Corrección con aprobador"],
+  ["GET", "/api/health", "Salud y terminales (legado)"],
+  ["POST", "/api/punches", "Marcación ULID kiosco"],
   ["POST", "/api/sync", "Cola offline"],
-  ["GET", "/api/audit", "Eventos (API key)"],
-  ["GET", "/api/punches/export", "CSV"],
 ];
 
 export default function DocsPage() {
   return (
-    <AppShell title="API" meta="Token demo-rfp-bio-2026 · X-API-Key">
+    <AppShell title="API" meta=" /api/v1 · JWT o X-API-Key demo-rfp-bio-2026">
       <div className="split-list">
         {routes.map(([method, path, note]) => (
           <div key={path} className="row">

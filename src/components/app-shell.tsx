@@ -1,15 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Camera,
   FileText,
   Inbox,
   LayoutDashboard,
+  LogIn,
   ScrollText,
+  Settings,
   UserPlus,
+  Users,
+  BarChart3,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { clearSession, getSessionUser } from "@/lib/client-session";
 import { APP } from "@/lib/config";
 
 const links = [
@@ -17,7 +23,10 @@ const links = [
   { href: "/kiosk", label: "Kiosco", icon: Camera },
   { href: "/enroll", label: "Enrolar", icon: UserPlus },
   { href: "/admin", label: "Operación", icon: LayoutDashboard },
+  { href: "/people", label: "Personas", icon: Users },
+  { href: "/reports", label: "Reportes", icon: BarChart3 },
   { href: "/audit", label: "Auditoría", icon: ScrollText },
+  { href: "/settings", label: "Ajustes", icon: Settings },
   { href: "/docs", label: "API", icon: FileText },
 ];
 
@@ -33,6 +42,13 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<ReturnType<typeof getSessionUser>>(null);
+
+  useEffect(() => {
+    setUser(getSessionUser());
+  }, [pathname]);
+
   return (
     <div className="shell">
       <aside className="rail">
@@ -62,7 +78,11 @@ export function AppShell({
             );
           })}
         </nav>
-        <p className="rail-foot">DEMO · no productivo</p>
+        <p className="rail-foot">
+          Oferta software v1
+          <br />
+          <span className="pill" style={{ marginTop: 8 }}>PoC browser</span>
+        </p>
       </aside>
       <section className="canvas">
         <header className="canvas-bar">
@@ -70,7 +90,27 @@ export function AppShell({
             <h1>{title}</h1>
             {meta ? <p>{meta}</p> : null}
           </div>
-          <div className="canvas-actions">{actions}</div>
+          <div className="canvas-actions">
+            {actions}
+            {user ? (
+              <button
+                type="button"
+                className="native-select shade"
+                onClick={() => {
+                  clearSession();
+                  setUser(null);
+                  router.push("/login");
+                }}
+              >
+                {user.name} · salir
+              </button>
+            ) : (
+              <Link href="/login" className="rail-link shade" style={{ minHeight: 34 }}>
+                <LogIn className="size-4" />
+                Entrar
+              </Link>
+            )}
+          </div>
         </header>
         <div className="canvas-body">{children}</div>
       </section>

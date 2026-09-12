@@ -9,7 +9,10 @@
     "lint": "eslint",
     "models": "node scripts/ensure-models.mjs",
     "predev": "node scripts/ensure-models.mjs",
-    "test": "node scripts/match.test.mjs"
+    "test": "node scripts/match.test.mjs && node scripts/queue.test.mjs && node scripts/attendance.test.mjs",
+    "smoke": "node scripts/rfp-smoke.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

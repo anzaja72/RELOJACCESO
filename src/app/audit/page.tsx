@@ -29,7 +29,7 @@ export default function AuditPage() {
   }, []);
 
   return (
-    <AppShell title="Auditoría" meta="Bitácora de altas, punches y revocaciones">
+    <AppShell title="Auditoría" meta="Accesos, cambios, exportaciones, enrolamiento y correcciones">
       {error && <p className="err-text" style={{ padding: 16 }}>{error}</p>}
       <div className="split">
         <div className="split-list">

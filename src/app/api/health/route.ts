@@ -8,7 +8,8 @@ export function GET() {
   getDb();
   return json({
     ok: true,
-    demo: true,
+    edition: APP.edition,
+    sandbox: process.env.SANDBOX === "true",
     app: APP.name,
     rfp: APP.rfp,
     time: new Date().toISOString(),

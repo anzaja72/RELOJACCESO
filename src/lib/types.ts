@@ -1,4 +1,4 @@
-export type PunchType = "IN" | "OUT";
+export type PunchType = "IN" | "OUT" | "BREAK_START" | "BREAK_END" | string;
 
 export type PunchDecision =
   | "matched"
@@ -7,12 +7,16 @@ export type PunchDecision =
   | "no_face"
   | "queued";
 
+export type PunchMethod = "face" | "supervisor_pin";
+
 export type Site = {
   id: string;
   code: string;
   name: string;
   city: string;
   timezone: string;
+  countryId?: string | null;
+  zoneId?: string | null;
 };
 
 export type Employee = {
@@ -25,6 +29,7 @@ export type Employee = {
   consentAt: string | null;
   enrolled: boolean;
   templateCount: number;
+  deleted?: boolean;
 };
 
 export type FaceTemplate = {
@@ -48,6 +53,11 @@ export type Punch = {
   decision: PunchDecision;
   offline: boolean;
   livenessHint: "pass" | "fail" | "skipped";
+  method?: PunchMethod | string;
+  eventType?: string;
+  supervisorId?: string | null;
+  reason?: string | null;
+  novelty?: string | null;
 };
 
 export type Terminal = {
@@ -83,6 +93,10 @@ export type SyncItem = {
   matchScore: number | null;
   decision: PunchDecision;
   livenessHint: "pass" | "fail" | "skipped";
+  method?: PunchMethod | string;
+  eventType?: string;
+  supervisorId?: string | null;
+  reason?: string | null;
 };
 
 export type QueuedPunch = SyncItem & {

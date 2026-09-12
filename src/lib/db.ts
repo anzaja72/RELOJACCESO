@@ -16,19 +16,25 @@ import type {
   Terminal,
 } from "@/lib/types";
 
+import { openJson, sealJson } from "@/lib/crypto-box";
+import { hashPassword } from "@/lib/session";
+
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
+const dbFile =
+  process.env.SANDBOX === "true" ? "asistencia.sandbox.db" : "asistencia.db";
 
 const globalForDb = globalThis as unknown as {
   __bioDb?: Database.Database;
 };
 
 function createDb() {
-  const db = new Database(path.join(dataDir, "asistencia.db"));
+  const db = new Database(path.join(dataDir, dbFile));
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   migrate(db);
   seed(db);
+  migrateV2(db);
   return db;
 }
 
@@ -185,7 +191,192 @@ function seed(db: Database.Database) {
   });
 }
 
-function recordEvent(db: Database.Database, type: string, payload: unknown) {
+function hasColumn(db: Database.Database, table: string, name: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return cols.some((c) => c.name === name);
+}
+
+function migrateV2(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS countries (
+      id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS zones (
+      id TEXT PRIMARY KEY, country_id TEXT NOT NULL, code TEXT NOT NULL, name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      scope_type TEXT NOT NULL,
+      scope_id TEXT,
+      password_hash TEXT NOT NULL,
+      totp_secret TEXT,
+      totp_enabled INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS schedules (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT NOT NULL,
+      weekday INTEGER NOT NULL,
+      start_hm TEXT NOT NULL,
+      end_hm TEXT NOT NULL,
+      late_grace_min INTEGER NOT NULL DEFAULT 10
+    );
+    CREATE TABLE IF NOT EXISTS exceptions (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      type TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS corrections (
+      id TEXT PRIMARY KEY,
+      punch_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      requested_by TEXT NOT NULL,
+      approved_by TEXT NOT NULL,
+      patch TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS alerts (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      site_id TEXT,
+      employee_id TEXT,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      acked INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS enrollment_audit (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT NOT NULL,
+      operator_id TEXT,
+      operator_name TEXT,
+      site_id TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  if (!hasColumn(db, "sites", "country_id")) {
+    db.exec("ALTER TABLE sites ADD COLUMN country_id TEXT");
+    db.exec("ALTER TABLE sites ADD COLUMN zone_id TEXT");
+  }
+  if (!hasColumn(db, "employees", "deleted_at")) {
+    db.exec("ALTER TABLE employees ADD COLUMN deleted_at TEXT");
+    db.exec("ALTER TABLE employees ADD COLUMN pin_hash TEXT");
+  }
+  if (!hasColumn(db, "punches", "method")) {
+    db.exec("ALTER TABLE punches ADD COLUMN method TEXT DEFAULT 'face'");
+    db.exec("ALTER TABLE punches ADD COLUMN event_type TEXT DEFAULT 'IN'");
+    db.exec("ALTER TABLE punches ADD COLUMN supervisor_id TEXT");
+    db.exec("ALTER TABLE punches ADD COLUMN reason TEXT");
+    db.exec("ALTER TABLE punches ADD COLUMN novelty TEXT");
+  }
+
+  const country = db.prepare("SELECT COUNT(*) as n FROM countries").get() as { n: number };
+  if (country.n === 0) {
+    db.prepare("INSERT INTO countries (id, code, name) VALUES (?,?,?)").run(
+      "cty_cr",
+      "CR",
+      "Costa Rica",
+    );
+    db.prepare("INSERT INTO zones (id, country_id, code, name) VALUES (?,?,?,?)").run(
+      "zone_gam",
+      "cty_cr",
+      "GAM",
+      "Gran Área Metropolitana",
+    );
+    db.prepare("INSERT INTO zones (id, country_id, code, name) VALUES (?,?,?,?)").run(
+      "zone_caribe",
+      "cty_cr",
+      "CAR",
+      "Caribe",
+    );
+    db.prepare("UPDATE sites SET country_id=?, zone_id=? WHERE id=?").run(
+      "cty_cr",
+      "zone_gam",
+      "site_r01",
+    );
+    db.prepare("UPDATE sites SET country_id=?, zone_id=? WHERE id=?").run(
+      "cty_cr",
+      "zone_caribe",
+      "site_r02",
+    );
+  }
+
+  const users = db.prepare("SELECT COUNT(*) as n FROM users").get() as { n: number };
+  if (users.n === 0) {
+    const now = new Date().toISOString();
+    const pass = hashPassword(process.env.ADMIN_PASSWORD || "RelojCR-Admin-2026!");
+    const insert = db.prepare(
+      `INSERT INTO users (id,email,name,role,scope_type,scope_id,password_hash,totp_secret,totp_enabled,active,created_at)
+       VALUES (?,?,?,?,?,?,?,?,0,1,?)`,
+    );
+    insert.run("usr_admin", "admin@reloj.cr", "Superadmin", "superadmin", "all", null, pass, null, now);
+    insert.run("usr_zona", "zona@reloj.cr", "Gerente GAM", "zone_manager", "zone", "zone_gam", pass, null, now);
+    insert.run("usr_sede", "sede@reloj.cr", "Gerente R01", "site_manager", "site", "site_r01", pass, null, now);
+    insert.run("usr_op", "operador@reloj.cr", "Operador kiosco", "operator", "site", "site_r01", pass, null, now);
+    insert.run("usr_audit", "auditor@reloj.cr", "Auditor", "auditor", "all", null, pass, null, now);
+  }
+
+  const sched = db.prepare("SELECT COUNT(*) as n FROM schedules").get() as { n: number };
+  if (sched.n === 0) {
+    const emps = db.prepare("SELECT id FROM employees").all() as Array<{ id: string }>;
+    const ins = db.prepare(
+      "INSERT INTO schedules (id,employee_id,weekday,start_hm,end_hm,late_grace_min) VALUES (?,?,?,?,?,?)",
+    );
+    for (const emp of emps) {
+      for (const day of [1, 2, 3, 4, 5]) {
+        ins.run(ulid(), emp.id, day, "07:00", "16:00", 10);
+      }
+    }
+  }
+
+  if (!hasColumn(db, "enrollment_audit", "action")) {
+    db.exec("ALTER TABLE enrollment_audit ADD COLUMN action TEXT DEFAULT 'enroll'");
+  }
+
+  const set = db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)");
+  set.run("event_types", JSON.stringify(["IN", "OUT", "BREAK_START", "BREAK_END"]));
+  set.run("retention_days", "365");
+  set.run("cloud_region_declared", "America/Costa_Rica — declarar región contractual en S05");
+  set.run("supervisor_pin", hashPassword(process.env.SUPERVISOR_PIN || "2468"));
+  set.run("product_edition", "oferta-software-v1");
+  set.run("alert_absent", "1");
+  set.run("alert_late", "1");
+  set.run("alert_terminal_offline", "1");
+  set.run("alert_sync_failed", "1");
+
+  const existing = db.prepare("SELECT id, descriptor FROM face_templates").all() as Array<{
+    id: string;
+    descriptor: string;
+  }>;
+  const upd = db.prepare("UPDATE face_templates SET descriptor=? WHERE id=?");
+  for (const row of existing) {
+    if (!row.descriptor.startsWith("v1:")) {
+      try {
+        upd.run(sealJson(JSON.parse(row.descriptor)), row.id);
+      } catch {
+        /* already opaque */
+      }
+    }
+  }
+}
+
+export function recordEvent(
+  db: Database.Database,
+  type: string,
+  payload: unknown,
+) {
   db.prepare(
     "INSERT INTO events (id, type, payload, created_at) VALUES (?, ?, ?, ?)",
   ).run(ulid(), type, JSON.stringify(payload), new Date().toISOString());
@@ -203,6 +394,19 @@ function mapEmployee(row: Record<string, unknown>): Employee {
     consentAt: row.consent_at ? String(row.consent_at) : null,
     enrolled: Number(row.template_count || 0) > 0,
     templateCount: Number(row.template_count || 0),
+    deleted: Boolean(row.deleted_at),
+  };
+}
+
+function mapSite(row: Record<string, unknown>): Site {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    city: String(row.city),
+    timezone: String(row.timezone),
+    countryId: row.country_id ? String(row.country_id) : null,
+    zoneId: row.zone_id ? String(row.zone_id) : null,
   };
 }
 
@@ -221,6 +425,11 @@ function mapPunch(row: Record<string, unknown>): Punch {
     decision: row.decision as PunchDecision,
     offline: Boolean(row.offline),
     livenessHint: (row.liveness_hint as Punch["livenessHint"]) || "skipped",
+    method: row.method ? String(row.method) : "face",
+    eventType: row.event_type ? String(row.event_type) : String(row.type),
+    supervisorId: row.supervisor_id ? String(row.supervisor_id) : null,
+    reason: row.reason ? String(row.reason) : null,
+    novelty: row.novelty ? String(row.novelty) : null,
   };
 }
 
@@ -237,24 +446,35 @@ const PUNCH_SELECT = `
 `;
 
 export function listSites(): Site[] {
-  return getDb()
-    .prepare("SELECT * FROM sites ORDER BY code")
-    .all() as Site[];
+  return (getDb().prepare("SELECT * FROM sites ORDER BY code").all() as Record<string, unknown>[]).map(
+    mapSite,
+  );
 }
 
 export function getSiteByCode(code: string): Site | undefined {
-  return getDb()
+  const row = getDb()
     .prepare("SELECT * FROM sites WHERE code = ? OR id = ?")
-    .get(code, code) as Site | undefined;
+    .get(code, code) as Record<string, unknown> | undefined;
+  return row ? mapSite(row) : undefined;
 }
 
-export function listEmployees(siteId?: string): Employee[] {
-  const sql = siteId
-    ? `${EMPLOYEE_SELECT} WHERE e.site_id = ? OR e.site_id = (SELECT id FROM sites WHERE code = ?) ORDER BY e.name`
-    : `${EMPLOYEE_SELECT} ORDER BY e.name`;
-  const rows = siteId
-    ? (getDb().prepare(sql).all(siteId, siteId) as Record<string, unknown>[])
-    : (getDb().prepare(sql).all() as Record<string, unknown>[]);
+export function listEmployees(
+  siteId?: string,
+  opts?: { includeDeleted?: boolean },
+): Employee[] {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  if (siteId) {
+    clauses.push("(e.site_id = ? OR e.site_id = (SELECT id FROM sites WHERE code = ?))");
+    params.push(siteId, siteId);
+  }
+  if (!opts?.includeDeleted) {
+    clauses.push("e.deleted_at IS NULL");
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = getDb()
+    .prepare(`${EMPLOYEE_SELECT} ${where} ORDER BY e.name`)
+    .all(...params) as Record<string, unknown>[];
   return rows.map(mapEmployee);
 }
 
@@ -301,27 +521,82 @@ export function setEmployeeConsent(id: string, consentAt: string) {
 
 export function patchEmployee(
   id: string,
-  patch: { active?: boolean; revokeConsent?: boolean },
+  patch: {
+    active?: boolean;
+    revokeConsent?: boolean;
+    name?: string;
+    code?: string;
+    siteId?: string;
+    deleted?: boolean;
+    pin?: string | null;
+    role?: string;
+  },
 ) {
   const current = getEmployee(id);
   if (!current) throw new Error("Colaborador no encontrado");
+  const db = getDb();
+  if (patch.name !== undefined) {
+    db.prepare("UPDATE employees SET name = ? WHERE id = ?").run(patch.name.trim(), id);
+  }
+  if (patch.code !== undefined) {
+    db.prepare("UPDATE employees SET code = ? WHERE id = ?").run(patch.code.trim().toUpperCase(), id);
+  }
+  if (patch.role !== undefined) {
+    db.prepare("UPDATE employees SET role = ? WHERE id = ?").run(patch.role.trim(), id);
+  }
+  if (patch.siteId) {
+    const site = getSiteByCode(patch.siteId);
+    if (!site) throw new Error("Sede destino no encontrada");
+    db.prepare("UPDATE employees SET site_id = ? WHERE id = ?").run(site.id, id);
+    recordEvent(db, "employee.transferred", { id, from: current.siteId, to: site.id });
+  }
   if (patch.active !== undefined) {
-    getDb()
-      .prepare("UPDATE employees SET active = ? WHERE id = ?")
-      .run(patch.active ? 1 : 0, id);
-    recordEvent(getDb(), "employee.updated", { id, active: patch.active });
+    db.prepare("UPDATE employees SET active = ? WHERE id = ?").run(patch.active ? 1 : 0, id);
+    recordEvent(db, "employee.updated", { id, active: patch.active });
+  }
+  if (patch.pin === null) {
+    db.prepare("UPDATE employees SET pin_hash = NULL WHERE id = ?").run(id);
+  } else if (typeof patch.pin === "string" && patch.pin.length) {
+    db.prepare("UPDATE employees SET pin_hash = ? WHERE id = ?").run(hashPassword(patch.pin), id);
+  }
+  if (patch.deleted === true) {
+    db.prepare("UPDATE employees SET deleted_at = ?, active = 0 WHERE id = ?").run(
+      new Date().toISOString(),
+      id,
+    );
+    db.prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
+    recordEvent(db, "employee.deleted", { id, templatesWiped: true });
+  }
+  if (patch.deleted === false) {
+    db.prepare("UPDATE employees SET deleted_at = NULL WHERE id = ?").run(id);
   }
   if (patch.revokeConsent) {
-    getDb().prepare("UPDATE employees SET consent_at = NULL WHERE id = ?").run(id);
-    getDb().prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
-    recordEvent(getDb(), "consent.revoked", { id });
+    db.prepare("UPDATE employees SET consent_at = NULL WHERE id = ?").run(id);
+    db.prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
+    recordEvent(db, "consent.revoked", { id });
   }
   return getEmployee(id)!;
 }
 
-export function wipeTemplates(employeeId: string) {
-  if (!getEmployee(employeeId)) throw new Error("Colaborador no encontrado");
+export function wipeTemplates(employeeId: string, audit?: { operatorId?: string | null; operatorName?: string | null; userAgent?: string | null }) {
+  const emp = getEmployee(employeeId);
+  if (!emp) throw new Error("Colaborador no encontrado");
   getDb().prepare("DELETE FROM face_templates WHERE employee_id = ?").run(employeeId);
+  getDb()
+    .prepare(
+      `INSERT INTO enrollment_audit (id, employee_id, operator_id, operator_name, site_id, user_agent, created_at, action)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      ulid(),
+      employeeId,
+      audit?.operatorId ?? null,
+      audit?.operatorName ?? null,
+      emp.siteId,
+      audit?.userAgent ?? null,
+      new Date().toISOString(),
+      "wipe",
+    );
   recordEvent(getDb(), "template.wiped", { employeeId });
 }
 
@@ -337,12 +612,21 @@ export function listTemplates(siteId?: string): FaceTemplate[] {
   return rows.map((row) => ({
     id: String(row.id),
     employeeId: String(row.employee_id),
-    descriptor: JSON.parse(String(row.descriptor)) as number[],
+    descriptor: openJson<number[]>(String(row.descriptor)),
     createdAt: String(row.created_at),
   }));
 }
 
-export function addTemplates(employeeId: string, descriptors: number[][]) {
+export function addTemplates(
+  employeeId: string,
+  descriptors: number[][],
+  audit?: {
+    operatorId?: string | null;
+    operatorName?: string | null;
+    userAgent?: string | null;
+    siteId?: string | null;
+  },
+) {
   const emp = getEmployee(employeeId);
   if (!emp) throw new Error("Colaborador no encontrado");
   const insert = getDb().prepare(
@@ -351,13 +635,29 @@ export function addTemplates(employeeId: string, descriptors: number[][]) {
   const now = new Date().toISOString();
   const tx = getDb().transaction(() => {
     for (const descriptor of descriptors) {
-      insert.run(ulid(), employeeId, JSON.stringify(descriptor), now);
+      insert.run(ulid(), employeeId, sealJson(descriptor), now);
     }
   });
   tx();
+  getDb()
+    .prepare(
+      `INSERT INTO enrollment_audit (id, employee_id, operator_id, operator_name, site_id, user_agent, created_at, action)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      ulid(),
+      employeeId,
+      audit?.operatorId ?? null,
+      audit?.operatorName ?? null,
+      audit?.siteId ?? emp.siteId,
+      audit?.userAgent ?? null,
+      now,
+      "enroll",
+    );
   recordEvent(getDb(), "template.enrolled", {
     employeeId,
     count: descriptors.length,
+    operator: audit?.operatorName ?? null,
   });
 }
 
@@ -380,8 +680,9 @@ export function upsertPunch(input: SyncItem & { offline?: boolean }): {
     .prepare(
       `INSERT INTO punches (
         id, employee_id, site_id, type, captured_at, received_at,
-        terminal_id, match_score, decision, offline, liveness_hint
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        terminal_id, match_score, decision, offline, liveness_hint,
+        method, event_type, supervisor_id, reason, novelty
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.id,
@@ -395,12 +696,18 @@ export function upsertPunch(input: SyncItem & { offline?: boolean }): {
       input.decision,
       input.offline ? 1 : 0,
       input.livenessHint,
+      input.method ?? "face",
+      input.eventType ?? input.type,
+      input.supervisorId ?? null,
+      input.reason ?? null,
+      null,
     );
-  recordEvent(getDb(), "punch.recorded", {
+  recordEvent(getDb(), "punch.created", {
     id: input.id,
     siteId: site.id,
     decision: input.decision,
     offline: Boolean(input.offline),
+    method: input.method ?? "face",
   });
   const row = getDb()
     .prepare(`${PUNCH_SELECT} WHERE p.id = ?`)
@@ -432,8 +739,12 @@ export function recentDuplicate(input: {
 export function listPunches(filters: {
   siteId?: string;
   from?: string;
+  fromExclusive?: string;
   to?: string;
+  afterId?: string;
+  employeeId?: string;
   limit?: number;
+  order?: "asc" | "desc";
 }): Punch[] {
   const clauses: string[] = [];
   const params: unknown[] = [];
@@ -443,19 +754,32 @@ export function listPunches(filters: {
     );
     params.push(filters.siteId, filters.siteId);
   }
+  if (filters.employeeId) {
+    clauses.push("p.employee_id = ?");
+    params.push(filters.employeeId);
+  }
   if (filters.from) {
     clauses.push("p.captured_at >= ?");
     params.push(filters.from);
+  }
+  if (filters.fromExclusive) {
+    clauses.push("p.captured_at > ?");
+    params.push(filters.fromExclusive);
   }
   if (filters.to) {
     clauses.push("p.captured_at <= ?");
     params.push(filters.to);
   }
+  if (filters.afterId) {
+    clauses.push("p.id > ?");
+    params.push(filters.afterId);
+  }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const limit = Math.min(filters.limit ?? 200, 500);
+  const limit = Math.min(filters.limit ?? 200, 5000);
+  const order = filters.order === "asc" ? "ASC" : "DESC";
   const rows = getDb()
     .prepare(
-      `${PUNCH_SELECT} ${where} ORDER BY p.captured_at DESC LIMIT ?`,
+      `${PUNCH_SELECT} ${where} ORDER BY p.captured_at ${order}, p.id ${order} LIMIT ?`,
     )
     .all(...params, limit) as Record<string, unknown>[];
   return rows.map(mapPunch);

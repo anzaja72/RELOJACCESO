@@ -105,6 +105,13 @@ export async function flushQueue(): Promise<{
         lastError: message,
       });
     }
+    void api
+      .reportAlert({
+        type: "sync.failed",
+        message: `Fallo de sincronización: ${queued.length} marcaciones · ${message}`,
+        siteId: queued[0]?.siteId,
+      })
+      .catch(() => undefined);
     return { synced: 0, failed: queued.length, remaining: queued.length };
   }
 }

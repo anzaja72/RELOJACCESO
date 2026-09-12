@@ -1,46 +1,95 @@
 openapi: 3.0.3
 info:
-  title: Reloj CR · RFP-BIO-2026-01
-  version: "0.1.0"
+  title: Reloj CR · Oferta software v1 · RFP-BIO-2026-01
+  version: "1.0.0"
   description: |
-    API REST del DEMO de asistencia biométrica para restaurantes (Costa Rica).
-    Autenticación admin: header `X-API-Key` o `Authorization: Bearer` con el token demo.
-    Las marcaciones del kiosco no requieren clave. Los ids de punch son ULID e idempotentes.
+    API REST de asistencia biométrica (Costa Rica). Versionada en `/api/v1`.
+    Auth: `X-API-Key`, `Authorization: Bearer <api-key>` o JWT de `POST /api/v1/auth/login`.
+    HTTPS se termina en el reverse proxy. Sandbox: `SANDBOX=true` (archivo SQLite distinto).
+    Rate limit: 80/min (10/min login). Códigos: AUTH_REQUIRED, FORBIDDEN, VALIDATION,
+    INVALID_CREDENTIALS, TOTP_REQUIRED, INVALID_TOTP, INVALID_PIN, NOT_FOUND.
+    Marcaciones ULID idempotentes. Webhooks HMAC opcionales (punch.created, terminal.offline, sync.failed).
   contact:
-    name: PoC Reloj CR
+    name: Reloj CR
 servers:
   - url: /
-    description: Misma origen que la app
+    description: Mismo origen
 security:
   - ApiKey: []
+  - Bearer: []
 paths:
-  /api/health:
+  /api/v1:
     get:
-      summary: Salud del servidor y terminales
+      summary: Versión y edición
       security: []
       responses:
-        "200":
-          description: Estado demo
-  /api/sites:
+        "200": { description: Metadatos }
+  /api/v1/health:
     get:
-      summary: Sedes
+      summary: Salud, sandbox, terminales, rate limit
       security: []
       responses:
-        "200":
-          description: Lista de restaurantes
-  /api/employees:
+        "200": { description: Estado }
+  /api/v1/openapi:
     get:
-      summary: Colaboradores
+      summary: Esta especificación
       security: []
+      responses:
+        "200": { description: YAML }
+  /api/v1/catalog:
+    get:
+      summary: Países, zonas, sedes, tipos de evento
+      security: []
+      responses:
+        "200": { description: Catálogo }
+  /api/v1/auth/login:
+    post:
+      summary: JWT (email + password + totp opcional)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+                totp: { type: string }
+      responses:
+        "200": { description: token + user }
+        "401": { description: INVALID_CREDENTIALS / TOTP_REQUIRED / INVALID_TOTP }
+  /api/v1/auth/me:
+    get:
+      summary: Sesión actual
+      responses:
+        "200": { description: Actor }
+  /api/v1/auth/totp:
+    post:
+      summary: Activa TOTP para el usuario JWT
+      responses:
+        "200": { description: secreto Base64 }
+  /api/v1/auth/oidc:
+    get:
+      summary: Stub OIDC/OAuth2
+      security: []
+      responses:
+        "200": { description: issuer / nota de integración }
+  /api/v1/employees:
+    get:
+      summary: Colaboradores (alcance RBAC)
       parameters:
         - in: query
           name: site
           schema: { type: string }
+        - in: query
+          name: includeDeleted
+          schema: { type: string }
       responses:
-        "200":
-          description: Empleados
+        "200": { description: Lista }
     post:
-      summary: Alta de colaborador
+      summary: Alta
       requestBody:
         required: true
         content:
@@ -53,158 +102,21 @@ paths:
                 code: { type: string }
                 siteId: { type: string }
                 role: { type: string }
-                consentAt: { type: string, format: date-time }
+                pin: { type: string }
       responses:
-        "201":
-          description: Creado
-  /api/employees/{id}/templates:
-    post:
-      summary: Guardar descriptores faciales (128-d)
+        "201": { description: Creado }
+  /api/v1/employees/{id}:
+    get:
+      summary: Detalle
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                descriptors:
-                  type: array
-                  items:
-                    type: array
-                    items: { type: number }
-                consentAt: { type: string }
       responses:
-        "201":
-          description: Plantillas guardadas
-  /api/templates:
-    get:
-      summary: Galería de plantillas para matching
-      security: []
-      parameters:
-        - in: query
-          name: site
-          schema: { type: string }
-      responses:
-        "200":
-          description: Empleados + descriptores
-  /api/identify:
-    post:
-      summary: Identificar 1:N (forma OpenBiometrics)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [descriptor]
-              properties:
-                descriptor:
-                  type: array
-                  items: { type: number }
-                siteId: { type: string }
-                threshold: { type: number }
-      responses:
-        "200":
-          description: matched | unknown
-  /api/punches:
-    get:
-      summary: Listar marcaciones
-      security: []
-      parameters:
-        - in: query
-          name: site
-          schema: { type: string }
-        - in: query
-          name: from
-          schema: { type: string }
-        - in: query
-          name: to
-          schema: { type: string }
-      responses:
-        "200":
-          description: Feed
-    post:
-      summary: Registrar marcación (idempotente por id)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id, siteId, type, capturedAt, terminalId]
-              properties:
-                id: { type: string, description: ULID }
-                siteId: { type: string }
-                type: { type: string, enum: [IN, OUT] }
-                capturedAt: { type: string, format: date-time }
-                terminalId: { type: string }
-                employeeId: { type: string, nullable: true }
-                matchScore: { type: number, nullable: true }
-                decision: { type: string }
-                livenessHint: { type: string }
-                offline: { type: boolean }
-      responses:
-        "201":
-          description: Creada
-        "200":
-          description: Ya existía
-  /api/sync:
-    post:
-      summary: Sincronizar cola offline
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                punches:
-                  type: array
-                  items: { type: object }
-      responses:
-        "200":
-          description: accepted + duplicates
-  /api/punches/export:
-    get:
-      summary: CSV de marcaciones
-      parameters:
-        - in: query
-          name: site
-          schema: { type: string }
-      responses:
-        "200":
-          description: text/csv
-  /api/terminals:
-    get:
-      summary: Estado de kioscos
-      security: []
-      responses:
-        "200":
-          description: Terminales
-  /api/terminals/heartbeat:
-    post:
-      summary: Latido del kiosco
-      security: []
-      responses:
-        "200":
-          description: ok
-  /api/audit:
-    get:
-      summary: Bitácora de auditoría
-      responses:
-        "200":
-          description: Eventos (webhook HMAC opcional vía WEBHOOK_URL)
-  /api/employees/{id}:
+        "200": { description: Empleado }
     patch:
-      summary: Activar/desactivar o revocar consentimiento
+      summary: Editar, trasladar, desactivar, baja (borra plantillas)
       parameters:
         - in: path
           name: id
@@ -216,21 +128,270 @@ paths:
             schema:
               type: object
               properties:
+                name: { type: string }
+                code: { type: string }
+                role: { type: string }
+                siteId: { type: string }
                 active: { type: boolean }
+                deleted: { type: boolean }
+                pin: { type: string, nullable: true }
                 revokeConsent: { type: boolean }
       responses:
-        "200":
-          description: Empleado actualizado
-  /api/openapi:
+        "200": { description: Actualizado }
+  /api/v1/punches:
     get:
-      summary: Esta especificación
+      summary: Incremental por since / cursor
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: afterId
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        "200": { description: punches + nextCursor }
+    post:
+      summary: Alta ULID (kiosco autenticado o API)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PunchIn"
+      responses:
+        "201": { description: Creada }
+        "200": { description: Idempotente }
+  /api/v1/punches/stream:
+    get:
+      summary: SSE cada 4 s
+      responses:
+        "200": { description: text/event-stream }
+  /api/v1/punches/pin:
+    post:
+      summary: Respaldo F08 (PIN supervisor + motivo)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeId, siteId, type, terminalId, reason, supervisorPin]
+              properties:
+                employeeId: { type: string }
+                siteId: { type: string }
+                type: { type: string }
+                terminalId: { type: string }
+                reason: { type: string }
+                supervisorPin: { type: string }
+      responses:
+        "201": { description: Autorizada }
+        "403": { description: INVALID_PIN }
+  /api/v1/reports:
+    get:
+      summary: Novedades del día
+      parameters:
+        - { in: query, name: day, schema: { type: string } }
+        - { in: query, name: site, schema: { type: string } }
+        - { in: query, name: employee, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses:
+        "200": { description: totals + rows }
+  /api/v1/exports/pack:
+    get:
+      summary: Pack de portabilidad
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [json, csv, xlsx, pdf, zip] }
+      responses:
+        "200": { description: Archivo o JSON }
+  /api/v1/corrections:
+    get:
+      summary: Historial de correcciones
+      responses:
+        "200": { description: Lista }
+    post:
+      summary: Corrección con motivo y aprobador (gerente+)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [punchId, reason]
+              properties:
+                punchId: { type: string }
+                reason: { type: string }
+                newTs: { type: string }
+                newType: { type: string }
+      responses:
+        "201": { description: Registrada }
+  /api/v1/schedules:
+    get:
+      responses:
+        "200": { description: Turnos }
+    post:
+      responses:
+        "201": { description: Upsert }
+  /api/v1/exceptions:
+    get:
+      responses:
+        "200": { description: Excepciones }
+    post:
+      responses:
+        "201": { description: Creada }
+  /api/v1/alerts:
+    get:
+      responses:
+        "200": { description: Alertas }
+    post:
       security: []
       responses:
-        "200":
-          description: YAML
+        "201": { description: Creada (p. ej. sync.failed del kiosco) }
+  /api/v1/alerts/{id}:
+    patch:
+      summary: Acusar alerta
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok }
+  /api/v1/settings:
+    get:
+      responses:
+        "200": { description: Ajustes (sin hash de PIN) }
+    patch:
+      responses:
+        "200": { description: Guardado }
+  /api/v1/settings/retention:
+    post:
+      summary: Aplica retención ahora
+      responses:
+        "200": { description: ok }
+  /api/v1/enrollment-audit:
+    get:
+      responses:
+        "200": { description: F02 }
+  /api/v1/users:
+    get:
+      summary: Usuarios (superadmin)
+      responses:
+        "200": { description: Lista }
+  /api/health:
+    get:
+      summary: Salud legado
+      security: []
+      responses:
+        "200": { description: Estado }
+  /api/sites:
+    get:
+      security: []
+      responses:
+        "200": { description: Sedes }
+  /api/employees:
+    get:
+      security: []
+      responses:
+        "200": { description: Colaboradores }
+    post:
+      responses:
+        "201": { description: Alta legado }
+  /api/employees/{id}:
+    patch:
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Actualizado }
+  /api/employees/{id}/templates:
+    post:
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "201": { description: Enrolado }
+    delete:
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Wipe }
+  /api/templates:
+    get:
+      security: []
+      responses:
+        "200": { description: Galería }
+  /api/identify:
+    post:
+      security: []
+      responses:
+        "200": { description: matched | unknown }
+  /api/punches:
+    get:
+      security: []
+      responses:
+        "200": { description: Feed }
+    post:
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PunchIn"
+      responses:
+        "201": { description: Creada }
+  /api/sync:
+    post:
+      security: []
+      responses:
+        "200": { description: accepted + duplicates }
+  /api/punches/export:
+    get:
+      responses:
+        "200": { description: CSV }
+  /api/terminals:
+    get:
+      security: []
+      responses:
+        "200": { description: Terminales }
+  /api/terminals/heartbeat:
+    post:
+      security: []
+      responses:
+        "200": { description: ok }
+  /api/audit:
+    get:
+      responses:
+        "200": { description: Eventos }
 components:
   securitySchemes:
     ApiKey:
       type: apiKey
       in: header
       name: X-API-Key
+    Bearer:
+      type: http
+      scheme: bearer
+  schemas:
+    PunchIn:
+      type: object
+      required: [id, siteId, type, capturedAt, terminalId]
+      properties:
+        id: { type: string, description: ULID }
+        siteId: { type: string }
+        type: { type: string }
+        capturedAt: { type: string, format: date-time }
+        terminalId: { type: string }
+        employeeId: { type: string, nullable: true }
+        matchScore: { type: number, nullable: true }
+        decision: { type: string }
+        livenessHint: { type: string }
+        offline: { type: boolean }
+        method: { type: string }
+        reason: { type: string }

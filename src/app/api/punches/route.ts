@@ -1,4 +1,5 @@
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
+import { eventTypes } from "@/lib/db-ops";
 import { listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import type { SyncItem } from "@/lib/types";
@@ -28,8 +29,8 @@ export async function POST(request: Request) {
     if (!body.id || !body.siteId || !body.type || !body.capturedAt || !body.terminalId) {
       return badRequest("id, siteId, type, capturedAt y terminalId son obligatorios");
     }
-    if (body.type !== "IN" && body.type !== "OUT") {
-      return badRequest("type debe ser IN o OUT");
+    if (!eventTypes().includes(body.type)) {
+      return badRequest(`type debe ser uno de: ${eventTypes().join(", ")}`);
     }
 
     let decision = body.decision ?? (body.employeeId ? "matched" : "unknown");

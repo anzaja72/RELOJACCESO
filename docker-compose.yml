@@ -6,6 +6,11 @@ services:
     environment:
       DEMO_API_KEY: ${DEMO_API_KEY:-demo-rfp-bio-2026}
       NEXT_PUBLIC_DEMO_API_KEY: ${NEXT_PUBLIC_DEMO_API_KEY:-demo-rfp-bio-2026}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-RelojCR-Admin-2026!}
+      SUPERVISOR_PIN: ${SUPERVISOR_PIN:-2468}
+      TEMPLATE_KEY: ${TEMPLATE_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      SANDBOX: ${SANDBOX:-}
       DATA_DIR: /data
       PORT: "47321"
       HOSTNAME: 0.0.0.0

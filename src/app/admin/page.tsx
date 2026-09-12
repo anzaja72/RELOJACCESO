@@ -5,7 +5,8 @@ import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
 import { SitePicker } from "@/components/site-picker";
 import { Button } from "@/components/ui/button";
-import { fetchAttendance } from "@/lib/api-client";
+import { api, fetchAttendance } from "@/lib/api-client";
+import { getToken } from "@/lib/client-session";
 import { PUBLIC_API_KEY } from "@/lib/config";
 import type { AttendanceRow, Punch, Site, Terminal } from "@/lib/types";
 
@@ -20,6 +21,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [corrStatus, setCorrStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
@@ -66,7 +69,7 @@ export default function AdminPage() {
       }
     }
     void load();
-    const id = window.setInterval(load, 3000);
+    const id = window.setInterval(load, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
@@ -83,9 +86,14 @@ export default function AdminPage() {
     );
   }, [punches, query]);
 
+  function authHeaders(): Record<string, string> {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : { "X-API-Key": PUBLIC_API_KEY };
+  }
+
   async function exportCsv() {
     const url = `/api/punches/export?site=${encodeURIComponent(siteId)}`;
-    const res = await fetch(url, { headers: { "X-API-Key": PUBLIC_API_KEY } });
+    const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) {
       setError("Exportación no autorizada o fallida");
       return;
@@ -117,6 +125,24 @@ export default function AdminPage() {
           )}
           <Button className="shade" onClick={() => void exportCsv()}>
             Exportar CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="shade"
+            onClick={() => {
+              void fetch(`/api/v1/exports/pack?format=zip`, { headers: authHeaders() })
+                .then((r) => r.blob())
+                .then((blob) => {
+                  const href = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = href;
+                  a.download = "reloj-cr-salida.zip";
+                  a.click();
+                  URL.revokeObjectURL(href);
+                });
+            }}
+          >
+            Paquete salida
           </Button>
         </>
       }
@@ -179,7 +205,44 @@ export default function AdminPage() {
                   <dt>ULID</dt>
                   <dd style={{ fontSize: 11 }}>{selected.id}</dd>
                 </div>
+                <div>
+                  <dt>Método</dt>
+                  <dd>{selected.method || "face"}</dd>
+                </div>
+                {selected.reason ? (
+                  <div>
+                    <dt>Motivo</dt>
+                    <dd>{selected.reason}</dd>
+                  </div>
+                ) : null}
               </dl>
+              <h2 style={{ marginTop: 20, fontSize: 14 }}>Corrección (F06)</h2>
+              <p className="muted">Requiere motivo y aprobador. Queda inmutable en auditoría.</p>
+              <div className="form" style={{ marginTop: 8 }}>
+                <input
+                  className="search"
+                  placeholder="Motivo de la corrección"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <Button
+                  className="shade"
+                  onClick={() => {
+                    void api
+                      .createCorrection({ punchId: selected.id, reason })
+                      .then(() => {
+                        setCorrStatus("Corrección registrada.");
+                        setReason("");
+                      })
+                      .catch((err: unknown) => {
+                        setCorrStatus(err instanceof Error ? err.message : "No se pudo corregir");
+                      });
+                  }}
+                >
+                  Registrar corrección
+                </Button>
+                {corrStatus && <p className="ok-text">{corrStatus}</p>}
+              </div>
             </>
           ) : (
             <p className="empty">Seleccione una marcación.</p>

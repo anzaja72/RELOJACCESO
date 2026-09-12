@@ -252,8 +252,9 @@ export default function EnrollPage() {
             <label className="consent-box">
               <Checkbox checked={consent} onCheckedChange={(value) => setConsent(Boolean(value))} />
               <span>
-                Autorizo el tratamiento de mi plantilla facial (Ley 8968). DEMO:
-                sin E2EE productivo. No se guardan fotos.
+                Autorizo el tratamiento de mi plantilla facial (Ley 8968).
+                Plantillas cifradas en reposo (AES-GCM). No se guardan fotos.
+                Queda auditoría de operador, sede y user-agent.
               </span>
             </label>
             <div className="flex flex-wrap gap-2">

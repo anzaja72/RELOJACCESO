@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/auth";
+import { readActor, requireAdmin } from "@/lib/auth";
 import {
   addTemplates,
   getEmployee,
@@ -42,7 +42,13 @@ export async function POST(
       return badRequest("Se requieren 1–3 descriptores de 128 dimensiones");
     }
     if (body.consentAt) setEmployeeConsent(employee.id, body.consentAt);
-    addTemplates(employee.id, descriptors.slice(0, 3));
+    const actor = readActor(request);
+    addTemplates(employee.id, descriptors.slice(0, 3), {
+      operatorId: actor?.id,
+      operatorName: actor?.name ?? actor?.email,
+      userAgent: request.headers.get("user-agent"),
+      siteId: employee.siteId,
+    });
     return json({ ok: true, employee: getEmployee(employee.id) }, 201);
   } catch (error) {
     return serverError(error);
@@ -58,6 +64,11 @@ export async function DELETE(
   const { id } = await context.params;
   const employee = getEmployee(id);
   if (!employee) return json({ error: "No encontrado" }, 404);
-  wipeTemplates(employee.id);
+  const actor = readActor(request);
+  wipeTemplates(employee.id, {
+    operatorId: actor?.id,
+    operatorName: actor?.name ?? actor?.email,
+    userAgent: request.headers.get("user-agent"),
+  });
   return json({ ok: true, employee: getEmployee(employee.id) });
 }

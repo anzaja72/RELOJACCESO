@@ -1,3 +1,4 @@
+import { getToken } from "@/lib/client-session";
 import { PUBLIC_API_KEY } from "@/lib/config";
 import type {
   AttendanceRow,
@@ -17,7 +18,11 @@ async function request<T>(
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (init.admin) headers.set("X-API-Key", PUBLIC_API_KEY);
+  if (init.admin) {
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    else headers.set("X-API-Key", PUBLIC_API_KEY);
+  }
   const response = await fetch(path, { ...init, headers, cache: "no-store" });
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json")
@@ -28,13 +33,25 @@ async function request<T>(
       typeof data === "object" && data && "error" in data
         ? String((data as { error: string }).error)
         : `Error ${response.status}`;
-    throw new Error(message);
+    const err = new Error(message) as Error & { code?: string; status?: number };
+    if (typeof data === "object" && data && "code" in data) {
+      err.code = String((data as { code: string }).code);
+    }
+    err.status = response.status;
+    throw err;
   }
   return data as T;
 }
 
 export const api = {
   sites: () => request<{ sites: Site[] }>("/api/sites"),
+  catalog: () =>
+    request<{
+      sites: Site[];
+      countries: unknown[];
+      zones: unknown[];
+      eventTypes: string[];
+    }>("/api/v1/catalog"),
   employees: (site?: string) =>
     request<{ employees: Employee[] }>(
       site ? `/api/employees?site=${encodeURIComponent(site)}` : "/api/employees",
@@ -50,8 +67,9 @@ export const api = {
     siteId: string;
     role?: string;
     consentAt?: string;
+    pin?: string;
   }) =>
-    request<{ employee: Employee }>("/api/employees", {
+    request<{ employee: Employee }>("/api/v1/employees", {
       method: "POST",
       admin: true,
       body: JSON.stringify(body),
@@ -78,11 +96,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  pinPunch: (body: {
+    employeeId: string;
+    siteId: string;
+    type: string;
+    terminalId: string;
+    reason: string;
+    supervisorPin: string;
+  }) =>
+    request<{ punch: Punch; created: boolean }>("/api/v1/punches/pin", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   sync: (punches: SyncItem[]) =>
     request<{ ok: boolean; accepted: string[]; duplicates: string[] }>(
       "/api/sync",
       { method: "POST", body: JSON.stringify({ punches }) },
     ),
+  reportAlert: (body: { type: string; message: string; siteId?: string }) =>
+    request<{ id: string }>("/api/v1/alerts", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   terminals: () => request<{ terminals: Terminal[] }>("/api/terminals"),
   heartbeat: (body: {
     id: string;
@@ -97,9 +132,18 @@ export const api = {
     }),
   patchEmployee: (
     id: string,
-    body: { active?: boolean; revokeConsent?: boolean },
+    body: {
+      active?: boolean;
+      revokeConsent?: boolean;
+      name?: string;
+      code?: string;
+      siteId?: string;
+      deleted?: boolean;
+      pin?: string | null;
+      role?: string;
+    },
   ) =>
-    request<{ employee: Employee }>(`/api/employees/${id}`, {
+    request<{ employee: Employee }>(`/api/v1/employees/${id}`, {
       method: "PATCH",
       admin: true,
       body: JSON.stringify(body),
@@ -112,6 +156,49 @@ export const api = {
   audit: () =>
     request<{ events: Array<{ id: string; type: string; payload: unknown; created_at: string }> }>(
       "/api/audit",
+      { admin: true },
+    ),
+  login: (body: { email: string; password: string; totp?: string }) =>
+    request<{ token: string; user: { email: string; name: string; role: string } }>(
+      "/api/v1/auth/login",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
+  reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
+  settings: () => request<Record<string, unknown>>("/api/v1/settings", { admin: true }),
+  saveSettings: (body: Record<string, string>) =>
+    request<{ ok: boolean }>("/api/v1/settings", {
+      method: "PATCH",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  corrections: () => request<{ corrections: unknown[] }>("/api/v1/corrections", { admin: true }),
+  createCorrection: (body: { punchId: string; reason: string; newTs?: string; newType?: string }) =>
+    request<{ correction: unknown }>("/api/v1/corrections", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  exceptions: () => request<{ exceptions: unknown[] }>("/api/v1/exceptions", { admin: true }),
+  createException: (body: { employeeId: string; date: string; type: string; reason: string }) =>
+    request<{ exception: unknown }>("/api/v1/exceptions", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  alerts: () => request<{ alerts: unknown[] }>("/api/v1/alerts", { admin: true }),
+  ackAlert: (id: string) =>
+    request<{ ok: boolean }>(`/api/v1/alerts/${id}`, { method: "PATCH", admin: true }),
+  enrollmentAudit: (employee?: string) =>
+    request<{ audit: unknown[] }>(
+      employee
+        ? `/api/v1/enrollment-audit?employee=${encodeURIComponent(employee)}`
+        : "/api/v1/enrollment-audit",
+      { admin: true },
+    ),
+  people: (includeDeleted = false) =>
+    request<{ employees: Employee[] }>(
+      `/api/v1/employees?includeDeleted=${includeDeleted ? "1" : "0"}`,
       { admin: true },
     ),
   health: () =>

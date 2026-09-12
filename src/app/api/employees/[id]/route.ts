@@ -22,9 +22,16 @@ export async function PATCH(
   if (denied) return denied;
   try {
     const { id } = await context.params;
-    const body = await parseJson<{ active?: boolean; revokeConsent?: boolean }>(
-      request,
-    );
+    const body = await parseJson<{
+      active?: boolean;
+      revokeConsent?: boolean;
+      name?: string;
+      code?: string;
+      siteId?: string;
+      deleted?: boolean;
+      pin?: string | null;
+      role?: string;
+    }>(request);
     const employee = patchEmployee(id, body);
     return json({ employee });
   } catch (error) {

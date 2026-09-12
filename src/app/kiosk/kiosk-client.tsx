@@ -37,6 +37,12 @@ export function KioskClient() {
   const [result, setResult] = useState<ResultState | null>(null);
   const [clock, setClock] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [eventType, setEventType] = useState<PunchType>("IN");
+  const [eventTypes, setEventTypes] = useState<string[]>(["IN", "OUT"]);
+  const [pinEmployee, setPinEmployee] = useState("");
+  const [pinReason, setPinReason] = useState("");
+  const [supervisorPin, setSupervisorPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
 
   const site = useMemo(
     () => sites.find((s) => s.id === siteId || s.code === siteId),
@@ -95,6 +101,12 @@ export function KioskClient() {
         );
       });
   }, [querySite]);
+
+  useEffect(() => {
+    void api.catalog().then((c) => {
+      if (c.eventTypes?.length) setEventTypes(c.eventTypes);
+    }).catch(() => undefined);
+  }, []);
 
   const refreshQueue = useCallback(async () => {
     setQueued((await listQueued()).length);
@@ -189,10 +201,16 @@ export function KioskClient() {
       }
       await new Promise((r) => window.setTimeout(r, 420));
       const second = await detectFace(video);
-      const live = livenessHint(first, second);
+      let live = livenessHint(first, second);
       if (!live.ok) {
-        setResult({ tone: "warn", title: "No verificado", detail: live.reason });
-        return;
+        await new Promise((r) => window.setTimeout(r, 350));
+        const third = await detectFace(video);
+        live = third ? livenessHint(first, third) : live;
+        if (!live.ok) {
+          setShowPin(true);
+          setResult({ tone: "warn", title: "No verificado", detail: live.reason });
+          return;
+        }
       }
       const match = identifyFace(first.descriptor, gallery);
       const item: SyncItem = {
@@ -219,12 +237,13 @@ export function KioskClient() {
           await enqueuePunch(item);
           await refreshQueue();
         }
+        setShowPin(true);
         setResult({
           tone: "bad",
           title: "No reconocido",
           detail: enrolledCount
-            ? "El rostro no coincide con las plantillas de esta sede."
-            : "Nadie está enrolado en esta sede. Use Enrolar primero.",
+            ? "Use PIN de supervisor con motivo. No hay marcación libre."
+            : "Nadie está enrolado en esta sede. Use Enrolar o PIN autorizado.",
         });
         return;
       }
@@ -278,6 +297,46 @@ export function KioskClient() {
     }
   }
 
+  async function punchWithPin() {
+    if (!site || !pinEmployee || !pinReason.trim() || !supervisorPin) {
+      setResult({
+        tone: "warn",
+        title: "Faltan datos",
+        detail: "Colaborador, motivo y PIN de supervisor son obligatorios.",
+      });
+      return;
+    }
+    setBusy(true);
+    try {
+      const saved = await api.pinPunch({
+        employeeId: pinEmployee,
+        siteId: site.id,
+        type: eventType,
+        terminalId: getTerminalId(),
+        reason: pinReason.trim(),
+        supervisorPin,
+      });
+      const name = gallery.find((g) => g.employee.id === pinEmployee)?.employee.name;
+      setSupervisorPin("");
+      setPinReason("");
+      setShowPin(false);
+      setResult({
+        tone: saved.created ? "ok" : "warn",
+        title: saved.created ? "Marcación autorizada" : "Ya existía",
+        detail: `${name || pinEmployee} · PIN supervisor · ${eventType}`,
+      });
+    } catch (error) {
+      setResult({
+        tone: "bad",
+        title: "PIN rechazado",
+        detail: error instanceof Error ? error.message : "No autorizado",
+      });
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setResult(null), 4200);
+    }
+  }
+
   return (
     <AppShell
       title={site ? site.name : loadError ? "Sin sede" : "Cargando sede…"}
@@ -304,7 +363,10 @@ export function KioskClient() {
             <button
               className="punch-btn in shade"
               disabled={busy || !modelsReady}
-              onClick={() => void punch("IN")}
+              onClick={() => {
+                setEventType("IN");
+                void punch("IN");
+              }}
             >
               <LogIn className="size-4" />
               Entrada
@@ -312,7 +374,10 @@ export function KioskClient() {
             <button
               className="punch-btn out shade"
               disabled={busy || !modelsReady}
-              onClick={() => void punch("OUT")}
+              onClick={() => {
+                setEventType("OUT");
+                void punch("OUT");
+              }}
             >
               <LogOut className="size-4" />
               Salida
@@ -323,8 +388,68 @@ export function KioskClient() {
           <h2>Marcación</h2>
           <p>
             El cruce es local. Sin red, la ULID queda en IndexedDB y se
-            sincroniza al volver.
+            sincroniza al volver. El respaldo no es marcación libre: exige PIN
+            de supervisor, colaborador y motivo.
           </p>
+          <label className="muted" style={{ display: "block", marginTop: 16 }}>
+            Tipo de evento
+          </label>
+          <select
+            className="native-select"
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value)}
+          >
+            {eventTypes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="punch-btn shade"
+            style={{ marginTop: 12, width: "100%" }}
+            onClick={() => setShowPin((v) => !v)}
+          >
+            Respaldo PIN supervisor
+          </button>
+          {showPin ? (
+            <div className="form" style={{ marginTop: 12 }}>
+              <select
+                className="native-select"
+                value={pinEmployee}
+                onChange={(e) => setPinEmployee(e.target.value)}
+              >
+                <option value="">Colaborador</option>
+                {gallery.map((g) => (
+                  <option key={g.employee.id} value={g.employee.id}>
+                    {g.employee.name} · {g.employee.code}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="search"
+                placeholder="Motivo (obligatorio)"
+                value={pinReason}
+                onChange={(e) => setPinReason(e.target.value)}
+              />
+              <input
+                className="search"
+                type="password"
+                placeholder="PIN supervisor"
+                value={supervisorPin}
+                onChange={(e) => setSupervisorPin(e.target.value)}
+              />
+              <button
+                type="button"
+                className="punch-btn in shade"
+                disabled={busy}
+                onClick={() => void punchWithPin()}
+              >
+                Autorizar marcación
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
       {result && (
