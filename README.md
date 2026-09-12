@@ -34,7 +34,7 @@ Matriz: [`docs/RFP_COMPLIANCE.md`](docs/RFP_COMPLIANCE.md). Biometría: [`docs/B
 
 ## Roadmap
 
-IA (briefing, chat, anomalías) queda en backlog y no se implementa en esta oferta: [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md).
+Pack IA v1.1 (P0 reportes, P3 anomalías, P1 briefing, P2 chat): [`docs/AI.md`](docs/AI.md) · estado [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md). Sin clave LLM hay fallback SQL. No hay score punitivo ni CCTV.
 
 ## Kiosco en LAN (tablet o Pi)
 

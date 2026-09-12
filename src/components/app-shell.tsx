@@ -13,6 +13,7 @@ import {
   UserPlus,
   Users,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getSessionUser } from "@/lib/client-session";
@@ -25,6 +26,7 @@ const links = [
   { href: "/admin", label: "Operación", icon: LayoutDashboard },
   { href: "/people", label: "Personas", icon: Users },
   { href: "/reports", label: "Reportes", icon: BarChart3 },
+  { href: "/ai", label: "Pregunta", icon: Sparkles },
   { href: "/audit", label: "Auditoría", icon: ScrollText },
   { href: "/settings", label: "Ajustes", icon: Settings },
   { href: "/docs", label: "API", icon: FileText },

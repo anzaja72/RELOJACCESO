@@ -19,7 +19,7 @@ Leyenda: **Sí** (cubierto en software), **Parcial** (software listo / falta con
 | F08 | Respaldo controlado si falla la cara | Sí | `/kiosk` PIN supervisor, `POST /api/v1/punches/pin` | Motivo + PIN + auditoría. **No** USB/RFID/huella. |
 | B05 | Modalidad alternativa | Sí | Igual F08 | Software-controlled, no driver nativo. |
 | R01 | Presentes / ausentes / tardes / novedades por restaurante | Sí | `/reports`, `GET /api/v1/reports` | Totales + lista. |
-| R02 | Filtros país/zona/sede/empleado/fecha/estado | Parcial | `/reports` sede/fecha/estado/empleado | País/zona vía jerarquía y alcance RBAC, no combo dedicado. |
+| R02 | Filtros país/zona/sede/empleado/fecha/estado | Sí | `/reports` + `GET /api/v1/reports` | Combos país/zona/sede/empleado/fecha/estado y deep links. |
 | R03 | Estado de terminal + sync | Sí | `/admin`, `/api/terminals`, alertas | Heartbeat 12 s, online <45 s. |
 | R04 | Export XLSX, CSV, PDF | Sí | `/api/v1/exports/pack?format=` | XLSX OOXML real (zip store). |
 | R05 | Historial de cambios / UI de auditoría | Sí | `/audit`, correcciones, enrollment-audit | Eventos + payload. |

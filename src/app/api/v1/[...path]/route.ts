@@ -219,6 +219,8 @@ async function handleGet(request: Request, parts: string[]) {
       siteId: url.searchParams.get("site") ?? undefined,
       employeeId: url.searchParams.get("employee") ?? undefined,
       status: url.searchParams.get("status") ?? undefined,
+      countryId: url.searchParams.get("country") ?? undefined,
+      zoneId: url.searchParams.get("zone") ?? undefined,
       scope: scopeOf(actor),
     });
     return json(report, 200, request);

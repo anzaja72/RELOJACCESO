@@ -26,6 +26,7 @@ const dbFile =
 
 const globalForDb = globalThis as unknown as {
   __bioDb?: Database.Database;
+  __bioV3?: boolean;
 };
 
 function createDb() {
@@ -35,12 +36,16 @@ function createDb() {
   migrate(db);
   seed(db);
   migrateV2(db);
+  migrateV3(db);
   return db;
 }
 
 export function getDb() {
   if (!globalForDb.__bioDb) {
     globalForDb.__bioDb = createDb();
+  } else if (!globalForDb.__bioV3) {
+    migrateV3(globalForDb.__bioDb);
+    globalForDb.__bioV3 = true;
   }
   return globalForDb.__bioDb;
 }
@@ -370,6 +375,26 @@ function migrateV2(db: Database.Database) {
       }
     }
   }
+}
+
+function migrateV3(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS anomalies (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      site_id TEXT,
+      employee_id TEXT,
+      day TEXT NOT NULL,
+      message TEXT NOT NULL,
+      punch_ids TEXT NOT NULL,
+      evidence TEXT NOT NULL,
+      reviewed INTEGER NOT NULL DEFAULT 0,
+      reviewed_by TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE(kind, site_id, day)
+    );
+  `);
+  globalForDb.__bioV3 = true;
 }
 
 export function recordEvent(

@@ -196,6 +196,47 @@ paths:
       responses:
         "201": { description: Autorizada }
         "403": { description: INVALID_PIN }
+  /api/v1/anomalies:
+    get:
+      summary: Anomalías P3
+      responses:
+        "200": { description: Lista }
+    post:
+      summary: Recalcular reglas del día
+      responses:
+        "200": { description: created + lista }
+  /api/v1/anomalies/{id}:
+    patch:
+      summary: Marcar revisada
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok }
+  /api/v1/ai/briefing:
+    get:
+      summary: Briefing del día (cron)
+      responses:
+        "200": { description: 5 bullets }
+    post:
+      summary: Generar briefing
+      responses:
+        "200": { description: 5 bullets }
+  /api/v1/ai/chat:
+    post:
+      summary: Pregunta a Reloj CR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: { type: string }
+                day: { type: string }
+                siteId: { type: string }
+      responses:
+        "200": { description: answer + cites }
   /api/v1/reports:
     get:
       summary: Novedades del día

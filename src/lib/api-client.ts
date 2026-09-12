@@ -201,6 +201,44 @@ export const api = {
       `/api/v1/employees?includeDeleted=${includeDeleted ? "1" : "0"}`,
       { admin: true },
     ),
+  briefing: (day?: string, site?: string) =>
+    request<{
+      briefing: { source: string; bullets: Array<{ text: string; href: string; cites: Array<{ type: string; id: string }> }> };
+      llm: { provider: string };
+    }>(
+      `/api/v1/ai/briefing?${new URLSearchParams({ ...(day ? { day } : {}), ...(site ? { site } : {}) }).toString()}`,
+      { method: "POST", admin: true },
+    ),
+  chat: (body: { question: string; day?: string; siteId?: string }) =>
+    request<{
+      answer: string;
+      intent: string;
+      cites: Array<{ type: string; id: string }>;
+      source: string;
+      missing: boolean;
+    }>("/api/v1/ai/chat", { method: "POST", admin: true, body: JSON.stringify(body) }),
+  anomalies: (qs = "") =>
+    request<{ anomalies: Array<{
+      id: string;
+      kind: string;
+      siteId: string | null;
+      day: string;
+      message: string;
+      punchIds: string[];
+      reviewed: boolean;
+      reviewedBy: string | null;
+    }> }>(`/api/v1/anomalies${qs ? `?${qs}` : ""}`, { admin: true }),
+  scanAnomalies: (day?: string) =>
+    request<{ created: number; anomalies: unknown[] }>(
+      `/api/v1/anomalies${day ? `?day=${encodeURIComponent(day)}` : ""}`,
+      { method: "POST", admin: true },
+    ),
+  reviewAnomaly: (id: string) =>
+    request<{ anomaly: { id: string } }>(`/api/v1/anomalies/${id}`, {
+      method: "PATCH",
+      admin: true,
+      body: JSON.stringify({ reviewed: true }),
+    }),
   health: () =>
     request<{
       ok: boolean;

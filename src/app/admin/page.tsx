@@ -23,6 +23,13 @@ export default function AdminPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [corrStatus, setCorrStatus] = useState<string | null>(null);
+  const [anomalies, setAnomalies] = useState<Array<{
+    id: string;
+    kind: string;
+    message: string;
+    reviewed: boolean;
+    punchIds: string[];
+  }>>([]);
 
   useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
@@ -76,6 +83,15 @@ export default function AdminPage() {
     };
   }, [siteId]);
 
+  useEffect(() => {
+    if (!siteId) return;
+    void api
+      .scanAnomalies()
+      .then(() => api.anomalies(new URLSearchParams({ site: siteId, reviewed: "0" }).toString()))
+      .then((list) => setAnomalies(list.anomalies.filter((a) => !a.reviewed)))
+      .catch(() => undefined);
+  }, [siteId]);
+
   const present = rows.filter((r) => r.status === "present").length;
   const selected = punches.find((p) => p.id === selectedId) ?? null;
   const filtered = useMemo(() => {
@@ -125,6 +141,9 @@ export default function AdminPage() {
           )}
           <Button className="shade" onClick={() => void exportCsv()}>
             Exportar CSV
+          </Button>
+          <Button variant="outline" className="shade" onClick={() => { window.location.href = "/ai"; }}>
+            Briefing / chat
           </Button>
           <Button
             variant="outline"
@@ -254,6 +273,27 @@ export default function AdminPage() {
               <span>
                 {row.employee.code} · {row.status === "present" ? "Presente" : "Ausente"}
               </span>
+            </div>
+          ))}
+          <h2 style={{ marginTop: 20, fontSize: 14 }}>Anomalías (P3)</h2>
+          {anomalies.length === 0 && <p className="muted">Sin anomalías abiertas en esta sede.</p>}
+          {anomalies.map((a) => (
+            <div key={a.id} className="row" style={{ padding: "10px 0" }}>
+              <strong>{a.kind}</strong>
+              <span>{a.message}</span>
+              {a.punchIds[0] ? <span>punch {a.punchIds[0]}</span> : null}
+              <Button
+                variant="outline"
+                className="shade"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  void api.reviewAnomaly(a.id).then(() => {
+                    setAnomalies((prev) => prev.filter((x) => x.id !== a.id));
+                  });
+                }}
+              >
+                Marcar revisada
+              </Button>
             </div>
           ))}
           <h2 style={{ marginTop: 20, fontSize: 14 }}>Terminales</h2>

@@ -362,21 +362,33 @@ function mapSchedule(row: Record<string, unknown>): Schedule {
   };
 }
 
+export function todayCR() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date());
+}
+
 export function reportForDay(input: {
   day?: string;
   siteId?: string;
   employeeId?: string;
   status?: string;
+  countryId?: string;
+  zoneId?: string;
   scope?: Scope;
 }) {
-  const day =
-    input.day ||
-    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date());
+  const day = input.day || todayCR();
   const from = `${day}T00:00:00-06:00`;
   const to = `${day}T23:59:59.999-06:00`;
-  const employees = (input.scope ? listEmployeesScoped(input.scope) : listEmployees(input.siteId)).filter(
+  const sites = listSites();
+  const siteById = new Map(sites.map((s) => [s.id, s]));
+  let employees = (input.scope ? listEmployeesScoped(input.scope) : listEmployees(input.siteId)).filter(
     (e) => !input.employeeId || e.id === input.employeeId,
   );
+  if (input.countryId) {
+    employees = employees.filter((e) => siteById.get(e.siteId)?.countryId === input.countryId);
+  }
+  if (input.zoneId) {
+    employees = employees.filter((e) => siteById.get(e.siteId)?.zoneId === input.zoneId);
+  }
   const punches = listPunches({
     siteId: input.siteId,
     from,
@@ -421,7 +433,21 @@ export function reportForDay(input: {
       omission: rows.filter((r) => r.status === "omission").length,
     },
     rows: filtered,
-    terminals: listTerminals().filter((t) => !input.siteId || t.siteId === input.siteId),
+    terminals: listTerminals().filter((t) => {
+      if (input.siteId && t.siteId !== input.siteId) return false;
+      const site = siteById.get(t.siteId);
+      if (input.countryId && site?.countryId !== input.countryId) return false;
+      if (input.zoneId && site?.zoneId !== input.zoneId) return false;
+      return true;
+    }),
+    filters: {
+      day,
+      siteId: input.siteId ?? null,
+      countryId: input.countryId ?? null,
+      zoneId: input.zoneId ?? null,
+      employeeId: input.employeeId ?? null,
+      status: input.status ?? null,
+    },
   };
 }
 
@@ -468,5 +494,6 @@ export function dumpMasters() {
     events: db.prepare("SELECT * FROM events ORDER BY created_at DESC LIMIT 2000").all(),
     punches: listPunches({ limit: 5000 }),
     terminals: listTerminals(),
+    anomalies: getDb().prepare("SELECT * FROM anomalies ORDER BY created_at DESC LIMIT 500").all(),
   };
 }
