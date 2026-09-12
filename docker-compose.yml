@@ -11,6 +11,13 @@ services:
       TEMPLATE_KEY: ${TEMPLATE_KEY:-}
       JWT_SECRET: ${JWT_SECRET:-}
       SANDBOX: ${SANDBOX:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-nvidia/nemotron-3-ultra-550b-a55b}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      LLM_ENABLE_THINKING: ${LLM_ENABLE_THINKING:-1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DATA_DIR: /data
       PORT: "47321"
       HOSTNAME: 0.0.0.0

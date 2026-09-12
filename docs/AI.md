@@ -13,17 +13,28 @@ La IA **no sustituye** la biometría. Opera sobre marcaciones ya persistidas. To
 
 ## Claves (nunca en git)
 
-En `.env.local`:
+1. Cree `.env.local` en la raíz del repo (Next.js la carga solo; no la suba a git).
+2. Para **NVIDIA Nemotron** (el snippet `client.chat.completions.create` de build.nvidia.com):
 
-```
-OPENAI_API_KEY=
-# OPENAI_MODEL=gpt-4o-mini
-# ANTHROPIC_API_KEY=
-# ANTHROPIC_MODEL=claude-3-5-haiku-latest
-# Compatible: LLM_BASE_URL=https://api.ejemplo.com/v1  LLM_API_KEY=  LLM_MODEL=
+```bash
+LLM_PROVIDER=nvidia
+NVIDIA_API_KEY=nvapi-pegue-aqui-su-clave
+NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+LLM_ENABLE_THINKING=1
+LLM_REASONING_BUDGET=4096
+LLM_MAX_TOKENS=2048
 ```
 
-Sin clave, briefing y chat usan **plantillas deterministas** sobre SQL (siguen siendo útiles).
+La clave se obtiene en [build.nvidia.com](https://build.nvidia.com) → API key. Reloj CR **no usa** el SDK de Python: llama el mismo endpoint OpenAI-compatible (`/v1/chat/completions`) **sin stream** (el briefing necesita el JSON completo). `temperature` por defecto es 0.2 para no inventar nombres.
+
+3. Reinicie `npm run dev`. En `/ai`, el briefing debe decir `llm · nvidia` (si la clave falla, cae a `template · nvidia`).
+
+Otras opciones: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, o `LLM_BASE_URL` + `LLM_API_KEY`.
+
+Sin ninguna clave, briefing y chat usan **plantillas SQL**.
+
+Demo para un socio: [`docs/SHARE.md`](SHARE.md).
 
 ## Privacidad: qué sale del servidor
 

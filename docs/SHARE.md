@@ -1,0 +1,53 @@
+# Enviar un demo a un socio
+
+`http://127.0.0.1:47321` solo lo ves tú. El socio necesita una URL pública **HTTPS** (la cámara del kiosco lo exige fuera de localhost).
+
+## Opción A — Túnel (la más rápida, 5 minutos)
+
+En tu máquina, con Reloj CR ya en `npm run dev`:
+
+```bash
+# Cloudflare (recomendado, HTTPS)
+cloudflared tunnel --url http://127.0.0.1:47321
+
+# o ngrok
+ngrok http 47321
+```
+
+Mándale la URL `https://….trycloudflare.com` (o `ngrok.io`).
+
+Dile que entre a `/login` con `admin@reloj.cr` / `RelojCR-Admin-2026!` y que **cambie esa clave** si el túnel queda abierto más de un rato.
+
+Si Next bloquea `/_next` desde el host del túnel:
+
+```bash
+ALLOWED_DEV_ORIGINS=tu-subdominio.trycloudflare.com npm run dev
+```
+
+## Opción B — Docker en un VPS (demo más estable)
+
+En un servidor con Docker:
+
+```bash
+git clone <este-repo>
+cd reloj-cr
+cp .env.example .env
+# edite NVIDIA_API_KEY / ADMIN_PASSWORD en .env
+docker compose up --build -d
+```
+
+Ponga Caddy o nginx con un certificado delante de `:47321`. Sin HTTPS el kiosco facial no abre la cámara en el celular del socio.
+
+## Qué no enviar
+
+- No commitee ni pegue la `NVIDIA_API_KEY` en el chat ni en la URL.
+- No use `SANDBOX=true` y producción en el mismo archivo SQLite.
+- El preview de Cursor (`127.0.0.1`) no es compartible con terceros.
+
+## Credenciales de fábrica (cámbielas en el demo)
+
+| Usuario | Clave |
+| --- | --- |
+| admin@reloj.cr | RelojCR-Admin-2026! |
+| PIN supervisor | 2468 |
+| API | demo-rfp-bio-2026 |

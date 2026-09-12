@@ -34,7 +34,7 @@ Matriz: [`docs/RFP_COMPLIANCE.md`](docs/RFP_COMPLIANCE.md). Biometría: [`docs/B
 
 ## Roadmap
 
-Pack IA v1.1 (P0 reportes, P3 anomalías, P1 briefing, P2 chat): [`docs/AI.md`](docs/AI.md) · estado [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md). Sin clave LLM hay fallback SQL. No hay score punitivo ni CCTV.
+Pack IA v1.1 (P0 reportes, P3 anomalías, P1 briefing, P2 chat): [`docs/AI.md`](docs/AI.md) · estado [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md). Nemotron: `NVIDIA_API_KEY` en `.env.local`. Demo para un socio: [`docs/SHARE.md`](docs/SHARE.md). Sin clave LLM hay fallback SQL. No hay score punitivo ni CCTV.
 
 ## Kiosco en LAN (tablet o Pi)
 
