@@ -33,6 +33,7 @@ export default function EnrollPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [listReady, setListReady] = useState(false);
 
   const site = useMemo(
     () => sites.find((s) => s.id === siteId),
@@ -54,15 +55,37 @@ export default function EnrollPage() {
     void loadFaceModels()
       .then(() => setModelsReady(true))
       .catch(() => setCameraError("No se pudieron cargar los modelos faciales."));
-    void api.sites().then(({ sites: rows }) => {
-      setSites(rows);
-      if (rows[0]) setSiteId(rows[0].id);
-    });
+    void api
+      .sites()
+      .then(({ sites: rows }) => {
+        setSites(rows);
+        if (rows[0]) setSiteId(rows[0].id);
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error ? err.message : "No se pudieron cargar las sedes",
+        );
+        setListReady(true);
+      });
   }, []);
 
   useEffect(() => {
     if (!siteId) return;
-    void api.employees(siteId).then((res) => setEmployees(res.employees));
+    setListReady(false);
+    void api
+      .employees(siteId)
+      .then((res) => {
+        setEmployees(res.employees);
+        setListReady(true);
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudieron cargar colaboradores",
+        );
+        setListReady(true);
+      });
   }, [siteId]);
 
   function pickEmployee(employee: Employee) {
@@ -275,22 +298,26 @@ export default function EnrollPage() {
             tablet o del Pi.
           </p>
           <ul className="people-list">
-            {employees.map((employee) => (
-              <li key={employee.id}>
-                <button type="button" onClick={() => pickEmployee(employee)}>
-                  <strong>{employee.name}</strong>
-                  <span>
-                    {employee.code} · {employee.role}
-                  </span>
-                </button>
-                <em className={employee.enrolled ? "ok-text" : "muted"}>
-                  {employee.enrolled
-                    ? `${employee.templateCount} plantillas`
-                    : "Sin enrolar"}
-                </em>
-              </li>
-            ))}
-            {employees.length === 0 && (
+            {!listReady && (
+              <li className="muted">Cargando colaboradores…</li>
+            )}
+            {listReady &&
+              employees.map((employee) => (
+                <li key={employee.id}>
+                  <button type="button" onClick={() => pickEmployee(employee)}>
+                    <strong>{employee.name}</strong>
+                    <span>
+                      {employee.code} · {employee.role}
+                    </span>
+                  </button>
+                  <em className={employee.enrolled ? "ok-text" : "muted"}>
+                    {employee.enrolled
+                      ? `${employee.templateCount} plantillas`
+                      : "Sin enrolar"}
+                  </em>
+                </li>
+              ))}
+            {listReady && employees.length === 0 && (
               <li className="muted">No hay colaboradores en esta sede.</li>
             )}
           </ul>

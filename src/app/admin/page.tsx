@@ -39,6 +39,10 @@ export default function AdminPage() {
       .then((data: { sites: Site[] }) => {
         setSites(data.sites);
         if (data.sites[0]) setSiteId(data.sites[0].id);
+      })
+      .catch(() => {
+        setError("No se pudieron cargar las sedes");
+        setLoading(false);
       });
   }, []);
 

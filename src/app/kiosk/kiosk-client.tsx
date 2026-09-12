@@ -37,6 +37,7 @@ export function KioskClient() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
   const [clock, setClock] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const site = useMemo(
     () => sites.find((s) => s.id === siteId || s.code === siteId),
@@ -79,13 +80,21 @@ export function KioskClient() {
   }, []);
 
   useEffect(() => {
-    void api.sites().then(({ sites: rows }) => {
-      setSites(rows);
-      const wanted = querySite?.toUpperCase();
-      const match =
-        rows.find((s) => s.code === wanted || s.id === querySite) ?? rows[0];
-      if (match) setSiteId(match.id);
-    });
+    void api
+      .sites()
+      .then(({ sites: rows }) => {
+        setSites(rows);
+        const wanted = querySite?.toUpperCase();
+        const match =
+          rows.find((s) => s.code === wanted || s.id === querySite) ?? rows[0];
+        if (match) setSiteId(match.id);
+        setLoadError(null);
+      })
+      .catch((err: unknown) => {
+        setLoadError(
+          err instanceof Error ? err.message : "No se pudieron cargar las sedes",
+        );
+      });
   }, [querySite]);
 
   const refreshQueue = useCallback(async () => {
@@ -278,9 +287,16 @@ export function KioskClient() {
         <section className="kiosk-top">
           <div>
             <p className="eyebrow">Marcación facial</p>
-            <h1>{site ? `${site.name}` : "Cargando sede…"}</h1>
+            <h1>
+              {site
+                ? site.name
+                : loadError
+                  ? "Sin sede"
+                  : "Cargando sede…"}
+            </h1>
             <p className="muted">
               {clock} · {enrolledCount} plantillas en {site?.city ?? "…"}
+              {loadError ? ` · ${loadError}` : ""}
             </p>
           </div>
           <div className="kiosk-tools">

@@ -23,7 +23,7 @@ docker compose up --build
 
 ## En tablet o Raspberry Pi (misma LAN)
 
-El servidor escucha en `0.0.0.0:47321`.
+El servidor escucha en `0.0.0.0:47321`. En desarrollo, Next.js solo sirve `/_next` a `localhost` salvo que el host esté en `allowedDevOrigins`. La config incluye `127.0.0.1` y las IPs LAN del equipo al arrancar; si usa un túnel, añada el host en `ALLOWED_DEV_ORIGINS`.
 
 1. En el host: `npm run dev` (o Compose).
 2. Averigüe la IP (`ip a` / `hostname -I`).
