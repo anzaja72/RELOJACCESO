@@ -243,7 +243,7 @@ export function KioskClient() {
           return;
         }
       } else {
-        await enqueuePunch({ ...item, decision: "queued" });
+        await enqueuePunch(item);
         await refreshQueue();
         setResult({
           tone: "ok",
