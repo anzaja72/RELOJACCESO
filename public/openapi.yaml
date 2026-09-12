@@ -1,0 +1,217 @@
+openapi: 3.0.3
+info:
+  title: Reloj CR · RFP-BIO-2026-01
+  version: "0.1.0"
+  description: |
+    API REST del DEMO de asistencia biométrica para restaurantes (Costa Rica).
+    Autenticación admin: header `X-API-Key` o `Authorization: Bearer` con el token demo.
+    Las marcaciones del kiosco no requieren clave. Los ids de punch son ULID e idempotentes.
+  contact:
+    name: PoC Reloj CR
+servers:
+  - url: /
+    description: Misma origen que la app
+security:
+  - ApiKey: []
+paths:
+  /api/health:
+    get:
+      summary: Salud del servidor y terminales
+      security: []
+      responses:
+        "200":
+          description: Estado demo
+  /api/sites:
+    get:
+      summary: Sedes
+      security: []
+      responses:
+        "200":
+          description: Lista de restaurantes
+  /api/employees:
+    get:
+      summary: Colaboradores
+      security: []
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        "200":
+          description: Empleados
+    post:
+      summary: Alta de colaborador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code, siteId]
+              properties:
+                name: { type: string }
+                code: { type: string }
+                siteId: { type: string }
+                role: { type: string }
+                consentAt: { type: string, format: date-time }
+      responses:
+        "201":
+          description: Creado
+  /api/employees/{id}/templates:
+    post:
+      summary: Guardar descriptores faciales (128-d)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                descriptors:
+                  type: array
+                  items:
+                    type: array
+                    items: { type: number }
+                consentAt: { type: string }
+      responses:
+        "201":
+          description: Plantillas guardadas
+  /api/templates:
+    get:
+      summary: Galería de plantillas para matching
+      security: []
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        "200":
+          description: Empleados + descriptores
+  /api/identify:
+    post:
+      summary: Identificar 1:N (forma OpenBiometrics)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [descriptor]
+              properties:
+                descriptor:
+                  type: array
+                  items: { type: number }
+                siteId: { type: string }
+                threshold: { type: number }
+      responses:
+        "200":
+          description: matched | unknown
+  /api/punches:
+    get:
+      summary: Listar marcaciones
+      security: []
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+      responses:
+        "200":
+          description: Feed
+    post:
+      summary: Registrar marcación (idempotente por id)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, siteId, type, capturedAt, terminalId]
+              properties:
+                id: { type: string, description: ULID }
+                siteId: { type: string }
+                type: { type: string, enum: [IN, OUT] }
+                capturedAt: { type: string, format: date-time }
+                terminalId: { type: string }
+                employeeId: { type: string, nullable: true }
+                matchScore: { type: number, nullable: true }
+                decision: { type: string }
+                livenessHint: { type: string }
+                offline: { type: boolean }
+      responses:
+        "201":
+          description: Creada
+        "200":
+          description: Ya existía
+  /api/sync:
+    post:
+      summary: Sincronizar cola offline
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                punches:
+                  type: array
+                  items: { type: object }
+      responses:
+        "200":
+          description: accepted + duplicates
+  /api/punches/export:
+    get:
+      summary: CSV de marcaciones
+      parameters:
+        - in: query
+          name: site
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/csv
+  /api/terminals:
+    get:
+      summary: Estado de kioscos
+      security: []
+      responses:
+        "200":
+          description: Terminales
+  /api/terminals/heartbeat:
+    post:
+      summary: Latido del kiosco
+      security: []
+      responses:
+        "200":
+          description: ok
+  /api/events:
+    get:
+      summary: Bitácora estilo webhook
+      responses:
+        "200":
+          description: Eventos persistidos (sin entrega HMAC en el DEMO)
+  /api/openapi:
+    get:
+      summary: Esta especificación
+      security: []
+      responses:
+        "200":
+          description: YAML
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key

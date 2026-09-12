@@ -1,0 +1,16 @@
+services:
+  reloj-cr:
+    build: .
+    ports:
+      - "47321:47321"
+    environment:
+      DEMO_API_KEY: ${DEMO_API_KEY:-demo-rfp-bio-2026}
+      NEXT_PUBLIC_DEMO_API_KEY: ${NEXT_PUBLIC_DEMO_API_KEY:-demo-rfp-bio-2026}
+      DATA_DIR: /data
+      PORT: "47321"
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - reloj-data:/data
+
+volumes:
+  reloj-data:
