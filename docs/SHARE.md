@@ -24,7 +24,13 @@ Si Next bloquea `/_next` desde el host del túnel:
 ALLOWED_DEV_ORIGINS=tu-subdominio.trycloudflare.com npm run dev
 ```
 
-## Opción B — Docker en un VPS (demo más estable)
+## Opción B — Render (HTTPS listo para el socio)
+
+Sí se puede. Receta: [`docs/RENDER.md`](RENDER.md).
+
+Resumen: Web Service **Docker** + disco `/data` (plan Starter) + secretos en el dashboard (`ADMIN_PASSWORD`, `NVIDIA_API_KEY`). URL tipo `https://reloj-cr-xxxx.onrender.com`. Empuje `main` a GitHub; Render no habla Origin de forma nativa.
+
+## Opción C — Docker en un VPS (demo más estable)
 
 En un servidor con Docker:
 

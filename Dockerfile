@@ -16,4 +16,5 @@ ENV DATA_DIR=/data
 ENV HOSTNAME=0.0.0.0
 EXPOSE 47321
 
-CMD ["npm", "start"]
+# Render inyecta PORT (p. ej. 10000). Local/Compose sigue en 47321.
+CMD ["sh", "-c", "npx next start -H 0.0.0.0 -p ${PORT:-47321}"]

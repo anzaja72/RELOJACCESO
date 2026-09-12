@@ -1,0 +1,39 @@
+# Blueprint Render: Docker + disco SQLite.
+# Dashboard → New → Blueprint → este repo.
+# Tras el primer deploy, ponga secretos en Environment (no los deje en este archivo).
+
+services:
+  - type: web
+    name: reloj-cr
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    disk:
+      name: reloj-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_API_KEY
+        generateValue: true
+      - key: NEXT_PUBLIC_DEMO_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SUPERVISOR_PIN
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: nvidia
+      - key: NVIDIA_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b
+      - key: NVIDIA_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
