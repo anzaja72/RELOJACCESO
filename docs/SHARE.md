@@ -1,6 +1,8 @@
 # Enviar un demo a un socio
 
-`http://127.0.0.1:47321` solo lo ves tú. El socio necesita una URL pública **HTTPS** (la cámara del kiosco lo exige fuera de localhost).
+`http://127.0.0.1:47321` solo lo ves tú. El socio necesita una URL pública **HTTPS** (la cámara del kiosco lo exige fuera de localhost), **o** arrancar Reloj CR en su propia máquina.
+
+El demo del agente Cursor **no es Docker en la nube**: es `npm run dev` en una VM temporal. Para Windows del socio: [`WINDOWS.md`](WINDOWS.md).
 
 ## Opción A — Túnel (la más rápida, 5 minutos)
 

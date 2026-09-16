@@ -28,6 +28,8 @@ Abre [http://127.0.0.1:47321](http://127.0.0.1:47321).
 
 `better-sqlite3` es nativo: si `npm install` falla, instala Xcode Command Line Tools (`xcode-select --install`) y vuelve a intentar.
 
+**Windows (socio):** el demo de Cursor no es una URL permanente. En la PC: Docker Desktop + `docker compose up --build`, o Node 22 + `npm install` / `npm run dev`. Guía: [`docs/WINDOWS.md`](docs/WINDOWS.md).
+
 Tests: `npm test` · humo RFP/IA: `npm run smoke` · Docker: `docker compose up --build`.
 
 ## Subir a GitHub (tú, desde el Mac)
