@@ -4,9 +4,7 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
-
-const JWT_SECRET =
-  process.env.JWT_SECRET || process.env.DEMO_API_KEY || "reloj-cr-jwt-v1";
+import { jwtSecret } from "@/lib/secrets";
 
 export type Role =
   | "superadmin"
@@ -41,37 +39,67 @@ export function verifyPassword(password: string, stored: string) {
   return prev.length === next.length && timingSafeEqual(prev, next);
 }
 
-export function signToken(user: SessionUser, hours = 12) {
+export type TerminalSession = {
+  terminalId: string;
+  siteId: string;
+  tokenId: string;
+};
+
+function sign(body: Record<string, unknown>, hours: number) {
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = b64url(
-    JSON.stringify({ ...user, exp: Date.now() + hours * 3600_000 }),
-  );
+  const payload = b64url(JSON.stringify({ ...body, exp: Date.now() + hours * 3600_000 }));
   const sig = b64url(
-    createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest(),
+    createHmac("sha256", jwtSecret()).update(`${header}.${payload}`).digest(),
   );
   return `${header}.${payload}.${sig}`;
 }
 
-export function verifyToken(token: string): SessionUser | null {
+function verify(token: string): Record<string, unknown> | null {
   const [header, payload, sig] = token.split(".");
   if (!header || !payload || !sig) return null;
   const expected = b64url(
-    createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest(),
+    createHmac("sha256", jwtSecret()).update(`${header}.${payload}`).digest(),
   );
   if (expected.length !== sig.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) {
     return null;
   }
-  const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as SessionUser & {
-    exp: number;
-  };
-  if (data.exp < Date.now()) return null;
+  const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as Record<string, unknown>;
+  if (typeof data.exp !== "number" || data.exp < Date.now()) return null;
+  return data;
+}
+
+export function signToken(user: SessionUser, hours = 12) {
+  return sign({ ...user, kind: "user" }, hours);
+}
+
+export function verifyToken(token: string): SessionUser | null {
+  const data = verify(token);
+  // Tokens sin `kind` son de usuario (emitidos antes de existir terminales).
+  if (!data || (data.kind ?? "user") !== "user") return null;
+  const user = data as unknown as SessionUser;
   return {
-    id: data.id,
-    email: data.email,
-    name: data.name,
-    role: data.role,
-    scopeType: data.scopeType,
-    scopeId: data.scopeId,
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    scopeType: user.scopeType,
+    scopeId: user.scopeId,
+  };
+}
+
+export const TERMINAL_TOKEN_HOURS = 24 * 365;
+
+export function signTerminalToken(terminal: TerminalSession) {
+  return sign({ ...terminal, kind: "terminal" }, TERMINAL_TOKEN_HOURS);
+}
+
+export function verifyTerminalToken(token: string): TerminalSession | null {
+  const data = verify(token);
+  if (!data || data.kind !== "terminal") return null;
+  return {
+    terminalId: String(data.terminalId),
+    siteId: String(data.siteId),
+    tokenId: String(data.tokenId),
   };
 }
 

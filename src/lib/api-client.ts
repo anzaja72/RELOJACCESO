@@ -1,5 +1,5 @@
-import { getToken } from "@/lib/client-session";
-import { PUBLIC_API_KEY } from "@/lib/config";
+import { clearSession, getToken } from "@/lib/client-session";
+import { clearTerminal, getTerminal } from "@/lib/terminal";
 import type {
   AttendanceRow,
   Employee,
@@ -8,22 +8,27 @@ import type {
   SyncItem,
   Terminal,
 } from "@/lib/types";
+import { TIMEZONE } from "@/lib/config";
 
 async function request<T>(
   path: string,
-  init: RequestInit & { admin?: boolean } = {},
+  init: RequestInit & { admin?: boolean; kiosk?: boolean; token?: string } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (init.admin) {
-    const token = getToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    else headers.set("X-API-Key", PUBLIC_API_KEY);
-  }
+  // kiosk: token de terminal (o la sesión de un usuario probando el kiosco).
+  const bearer =
+    init.token ??
+    (init.kiosk ? (getTerminal()?.token ?? getToken()) : init.admin ? getToken() : null);
+  if (bearer) headers.set("Authorization", `Bearer ${bearer}`);
   const response = await fetch(path, { ...init, headers, cache: "no-store" });
+  if (response.status === 401 && !init.token) {
+    if (init.kiosk && getTerminal()) clearTerminal();
+    else if (init.admin) expireSession();
+  }
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json")
     ? await response.json()
@@ -43,6 +48,14 @@ async function request<T>(
   return data as T;
 }
 
+function expireSession() {
+  clearSession();
+  const here = window.location.pathname + window.location.search;
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign(`/login?next=${encodeURIComponent(here)}`);
+  }
+}
+
 export const api = {
   sites: () => request<{ sites: Site[] }>("/api/sites"),
   catalog: () =>
@@ -55,12 +68,15 @@ export const api = {
   employees: (site?: string) =>
     request<{ employees: Employee[] }>(
       site ? `/api/employees?site=${encodeURIComponent(site)}` : "/api/employees",
+      { admin: true },
     ),
   gallery: (site?: string) =>
     request<{
       employees: Employee[];
       templates: { id: string; employeeId: string; descriptor: number[]; createdAt: string }[];
-    }>(site ? `/api/templates?site=${encodeURIComponent(site)}` : "/api/templates"),
+    }>(site ? `/api/templates?site=${encodeURIComponent(site)}` : "/api/templates", {
+      kiosk: true,
+    }),
   createEmployee: (body: {
     name: string;
     code: string;
@@ -90,10 +106,12 @@ export const api = {
   punches: (site?: string) =>
     request<{ punches: Punch[] }>(
       site ? `/api/punches?site=${encodeURIComponent(site)}&limit=80` : "/api/punches?limit=80",
+      { admin: true },
     ),
   createPunch: (body: SyncItem & { offline?: boolean }) =>
     request<{ punch: Punch; created: boolean }>("/api/punches", {
       method: "POST",
+      kiosk: true,
       body: JSON.stringify(body),
     }),
   pinPunch: (body: {
@@ -106,19 +124,21 @@ export const api = {
   }) =>
     request<{ punch: Punch; created: boolean }>("/api/v1/punches/pin", {
       method: "POST",
+      kiosk: true,
       body: JSON.stringify(body),
     }),
   sync: (punches: SyncItem[]) =>
     request<{ ok: boolean; accepted: string[]; duplicates: string[] }>(
       "/api/sync",
-      { method: "POST", body: JSON.stringify({ punches }) },
+      { method: "POST", kiosk: true, body: JSON.stringify({ punches }) },
     ),
   reportAlert: (body: { type: string; message: string; siteId?: string }) =>
     request<{ id: string }>("/api/v1/alerts", {
       method: "POST",
+      kiosk: true,
       body: JSON.stringify(body),
     }),
-  terminals: () => request<{ terminals: Terminal[] }>("/api/terminals"),
+  terminals: () => request<{ terminals: Terminal[] }>("/api/terminals", { admin: true }),
   heartbeat: (body: {
     id: string;
     siteId: string;
@@ -128,6 +148,7 @@ export const api = {
   }) =>
     request<{ ok: boolean }>("/api/terminals/heartbeat", {
       method: "POST",
+      kiosk: true,
       body: JSON.stringify(body),
     }),
   patchEmployee: (
@@ -163,6 +184,12 @@ export const api = {
       "/api/v1/auth/login",
       { method: "POST", body: JSON.stringify(body) },
     ),
+  activateTerminal: (body: { siteId: string; label?: string }, token: string) =>
+    request<{ token: string; terminalId: string; site: Site }>("/api/v1/terminals/activate", {
+      method: "POST",
+      token,
+      body: JSON.stringify(body),
+    }),
   me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
   reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
   settings: () => request<Record<string, unknown>>("/api/v1/settings", { admin: true }),
@@ -244,7 +271,7 @@ export const api = {
       ok: boolean;
       today: { present: number; absent: number; enrolled: number; punches: number };
       terminals: Terminal[];
-    }>("/api/health"),
+    }>("/api/health", { admin: true }),
 };
 
 export async function fetchAttendance(site?: string): Promise<{
@@ -259,20 +286,20 @@ export async function fetchAttendance(site?: string): Promise<{
     api.terminals(),
   ]);
   const today = new Date().toLocaleDateString("en-CA", {
-    timeZone: "America/Costa_Rica",
+    timeZone: TIMEZONE,
   });
   const rows: AttendanceRow[] = employeesRes.employees.map((employee) => {
     const mine = punchesRes.punches.filter((p) => p.employeeId === employee.id);
     const last = mine[0] ?? null;
     const lastIn = mine.find((p) => {
       const day = new Date(p.capturedAt).toLocaleDateString("en-CA", {
-        timeZone: "America/Costa_Rica",
+        timeZone: TIMEZONE,
       });
       return p.type === "IN" && p.decision === "matched" && day === today;
     });
     const lastOut = mine.find((p) => {
       const day = new Date(p.capturedAt).toLocaleDateString("en-CA", {
-        timeZone: "America/Costa_Rica",
+        timeZone: TIMEZONE,
       });
       return p.type === "OUT" && p.decision === "matched" && day === today;
     });

@@ -15,7 +15,7 @@ Use **Docker** (no el runtime Node “nativo”): `better-sqlite3` necesita comp
 | Nemotron | Ponga `NVIDIA_API_KEY` en Environment del servicio (secret). No en el repo |
 | Multi-instancia | No. Un solo web service; SQLite no se comparte entre réplicas |
 
-No es un SLA de producción ni una región Costa Rica. Es un demo compartible.
+No es un SLA de producción ni garantiza residencia de datos en Colombia (`render.yaml` usa `virginia`, la región de Render más cercana). Es un demo compartible.
 
 ## Pasos (Dashboard)
 
@@ -26,14 +26,17 @@ No es un SLA de producción ni una región Costa Rica. Es un demo compartible.
 5. Environment (secrets, no commitear):
 
 ```
-ADMIN_PASSWORD=…          # cámbielo; no deje RelojCR-Admin-2026!
-SUPERVISOR_PIN=…
-DEMO_API_KEY=…
-NEXT_PUBLIC_DEMO_API_KEY=  # igual que DEMO_API_KEY
+ADMIN_PASSWORD=…          # obligatorio, 12+ caracteres
+SUPERVISOR_PIN=…          # obligatorio, 6+ dígitos
+JWT_SECRET=…              # el Blueprint lo genera
+TEMPLATE_KEY=…            # el Blueprint lo genera; no lo cambie tras enrolar
+DEMO_API_KEY=…            # opcional, solo integraciones
 NVIDIA_API_KEY=nvapi-…
 LLM_PROVIDER=nvidia
 NVIDIA_MODEL=nvidia/nemotron-3-ultra-550b-a55b
 ```
+
+Sin los cuatro obligatorios el servicio no arranca y el log dice cuál falta.
 
 6. Health check: `/api/health`.
 7. Deploy. La URL será `https://reloj-cr-xxxx.onrender.com`.
@@ -42,7 +45,7 @@ Mándele a su socio:
 
 - URL + `/login`
 - usuario `admin@reloj.cr` y la **ADMIN_PASSWORD** que configuró
-- kiosco: `https://….onrender.com/kiosk?site=R01`
+- kiosco: `https://….onrender.com/kiosk?site=R01`. La primera vez pide activar la tablet con un usuario operador o superior
 
 En el plan Starter el servicio **se duerme** si no hay tráfico; el primer hit tarda ~1 min.
 
@@ -57,6 +60,7 @@ En el plan Starter el servicio **se duerme** si no hay tráfico; el primer hit t
 
 - Logs: `better-sqlite3` / `node-gyp` → use este Dockerfile, no “Node” runtime.
 - Health check 502 → el proceso debe escuchar `process.env.PORT` (el `CMD` del Dockerfile ya lo hace).
+- "Reloj CR no arranca: faltan secretos de producción" → complete las variables que lista el log.
 - Cámara bloqueada → abra `https://`, no `http://`.
 - Estilos rotos → raro en producción; no hace falta `ALLOWED_DEV_ORIGINS`.
 

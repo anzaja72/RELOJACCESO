@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { clearSession, getSessionUser } from "@/lib/client-session";
+import { clearSession, getSessionUser, getToken } from "@/lib/client-session";
 import { APP } from "@/lib/config";
 
 const links = [
@@ -32,6 +32,13 @@ const links = [
   { href: "/docs", label: "API", icon: FileText },
 ];
 
+// Pantallas que no exigen sesión: inicio, login, kiosco (usa token de terminal) y docs.
+const PUBLIC_PATHS = ["/", "/login", "/kiosk", "/docs"];
+
+function isPublic(pathname: string) {
+  return PUBLIC_PATHS.some((p) => (p === "/" ? pathname === "/" : pathname.startsWith(p)));
+}
+
 export function AppShell({
   title,
   meta,
@@ -46,10 +53,18 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<ReturnType<typeof getSessionUser>>(null);
+  const [allowed, setAllowed] = useState(isPublic(pathname));
 
   useEffect(() => {
     setUser(getSessionUser());
-  }, [pathname]);
+    if (isPublic(pathname) || getToken()) {
+      setAllowed(true);
+      return;
+    }
+    setAllowed(false);
+    const next = window.location.pathname + window.location.search;
+    router.replace(`/login?next=${encodeURIComponent(next)}`);
+  }, [pathname, router]);
 
   return (
     <div className="shell">
@@ -114,7 +129,9 @@ export function AppShell({
             )}
           </div>
         </header>
-        <div className="canvas-body">{children}</div>
+        <div className="canvas-body">
+          {allowed ? children : <p className="muted">Redirigiendo a inicio de sesión…</p>}
+        </div>
       </section>
     </div>
   );

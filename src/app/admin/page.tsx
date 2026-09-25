@@ -6,9 +6,9 @@ import { OfflineBadge } from "@/components/offline-badge";
 import { SitePicker } from "@/components/site-picker";
 import { Button } from "@/components/ui/button";
 import { api, fetchAttendance } from "@/lib/api-client";
-import { getToken } from "@/lib/client-session";
-import { PUBLIC_API_KEY } from "@/lib/config";
+import { authHeaders } from "@/lib/client-session";
 import type { AttendanceRow, Punch, Site, Terminal } from "@/lib/types";
+import { LOCALE } from "@/lib/config";
 
 export default function AdminPage() {
   const [sites, setSites] = useState<Site[]>([]);
@@ -102,11 +102,6 @@ export default function AdminPage() {
     );
   }, [punches, query]);
 
-  function authHeaders(): Record<string, string> {
-    const token = getToken();
-    return token ? { Authorization: `Bearer ${token}` } : { "X-API-Key": PUBLIC_API_KEY };
-  }
-
   async function exportCsv() {
     const url = `/api/punches/export?site=${encodeURIComponent(siteId)}`;
     const res = await fetch(url, { headers: authHeaders() });
@@ -183,7 +178,7 @@ export default function AdminPage() {
                   {punch.type === "IN" ? "Entrada" : "Salida"}
                 </strong>
                 <span>
-                  {new Date(punch.capturedAt).toLocaleTimeString("es-CR")} ·{" "}
+                  {new Date(punch.capturedAt).toLocaleTimeString(LOCALE)} ·{" "}
                   {punch.decision}
                 </span>
                 <div className="tags">
@@ -210,7 +205,7 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <dt>Capturado</dt>
-                  <dd>{new Date(selected.capturedAt).toLocaleString("es-CR")}</dd>
+                  <dd>{new Date(selected.capturedAt).toLocaleString(LOCALE)}</dd>
                 </div>
                 <div>
                   <dt>Score</dt>
@@ -303,7 +298,7 @@ export default function AdminPage() {
               <strong>{t.label}</strong>
               <span>
                 {t.online ? "En línea" : "Silencio"} ·{" "}
-                {new Date(t.lastSeen).toLocaleTimeString("es-CR")}
+                {new Date(t.lastSeen).toLocaleTimeString(LOCALE)}
               </span>
             </div>
           ))}

@@ -1,3 +1,4 @@
+import { isKioskDenied, kioskSite, kioskTerminalId, requireKiosk } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { recentDuplicate, upsertPunch } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const limited = rateLimit(request, 30);
   if (limited) return limited;
+  const caller = requireKiosk(request);
+  if (isKioskDenied(caller)) return caller;
   try {
     const body = await parseJson<{ punches?: SyncItem[] }>(request);
     const items = body.punches ?? [];
@@ -17,6 +20,8 @@ export async function POST(request: Request) {
     const accepted: string[] = [];
     const duplicates: string[] = [];
     for (const item of items) {
+      item.siteId = kioskSite(caller, item.siteId) ?? "";
+      item.terminalId = kioskTerminalId(caller, item.terminalId);
       if (!item.id || !item.siteId || !item.type || !item.capturedAt || !item.terminalId) {
         continue;
       }

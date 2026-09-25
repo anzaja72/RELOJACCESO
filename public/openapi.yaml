@@ -3,7 +3,7 @@ info:
   title: Reloj CR · Oferta software v1 · RFP-BIO-2026-01
   version: "1.0.0"
   description: |
-    API REST de asistencia biométrica (Costa Rica). Versionada en `/api/v1`.
+    API REST de asistencia biométrica (Colombia, America/Bogota). Versionada en `/api/v1`.
     Auth: `X-API-Key`, `Authorization: Bearer <api-key>` o JWT de `POST /api/v1/auth/login`.
     HTTPS se termina en el reverse proxy. Sandbox: `SANDBOX=true` (archivo SQLite distinto).
     Rate limit: 80/min (10/min login). Códigos: AUTH_REQUIRED, FORBIDDEN, VALIDATION,
@@ -177,8 +177,7 @@ paths:
         "200": { description: text/event-stream }
   /api/v1/punches/pin:
     post:
-      summary: Respaldo F08 (PIN supervisor + motivo)
-      security: []
+      summary: Respaldo F08 (PIN supervisor + motivo). Token de terminal o usuario con escritura
       requestBody:
         required: true
         content:
@@ -196,6 +195,30 @@ paths:
       responses:
         "201": { description: Autorizada }
         "403": { description: INVALID_PIN }
+  /api/v1/terminals/activate:
+    post:
+      summary: Activa un kiosco para una sede (operador o superior). Devuelve un token de terminal de 1 año
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId]
+              properties:
+                siteId: { type: string, description: id o código de sede }
+                label: { type: string }
+      responses:
+        "201": { description: "{ token, terminalId, site, expiresHours }" }
+        "403": { description: Sede fuera del alcance del usuario }
+  /api/v1/terminals/{id}/revoke:
+    post:
+      summary: Revoca el token de una terminal (gerente de sede o superior)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Revocada }
+        "404": { description: No existe o ya revocada }
   /api/v1/anomalies:
     get:
       summary: Anomalías P3
@@ -340,7 +363,6 @@ paths:
         "200": { description: Sedes }
   /api/employees:
     get:
-      security: []
       responses:
         "200": { description: Colaboradores }
     post:
@@ -365,21 +387,17 @@ paths:
         "200": { description: Wipe }
   /api/templates:
     get:
-      security: []
       responses:
         "200": { description: Galería }
   /api/identify:
     post:
-      security: []
       responses:
         "200": { description: matched | unknown }
   /api/punches:
     get:
-      security: []
       responses:
         "200": { description: Feed }
     post:
-      security: []
       requestBody:
         content:
           application/json:
@@ -389,7 +407,6 @@ paths:
         "201": { description: Creada }
   /api/sync:
     post:
-      security: []
       responses:
         "200": { description: accepted + duplicates }
   /api/punches/export:
@@ -398,12 +415,10 @@ paths:
         "200": { description: CSV }
   /api/terminals:
     get:
-      security: []
       responses:
         "200": { description: Terminales }
   /api/terminals/heartbeat:
     post:
-      security: []
       responses:
         "200": { description: ok }
   /api/audit:

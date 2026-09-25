@@ -28,3 +28,9 @@ export function clearSession() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
 }
+
+/** Encabezados para fetch directos (descargas) con la sesión actual. */
+export function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}

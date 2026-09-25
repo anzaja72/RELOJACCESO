@@ -6,14 +6,15 @@ import { ulid } from "ulidx";
 import { LogIn, LogOut, UserRoundX } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
-import { SitePicker } from "@/components/site-picker";
 import { WebcamPanel } from "@/components/webcam-panel";
 import { api } from "@/lib/api-client";
 import { detectFace, livenessHint, loadFaceModels } from "@/lib/face";
 import { identifyFace, type GalleryEntry } from "@/lib/match";
 import { cacheGallery, enqueuePunch, flushQueue, listQueued, readGallery } from "@/lib/offline";
-import { getTerminalId } from "@/lib/terminal";
+import { getTerminal, getTerminalId, type TerminalBinding } from "@/lib/terminal";
+import { KioskActivation } from "./kiosk-activation";
 import type { PunchType, Site, SyncItem } from "@/lib/types";
+import { LOCALE, TIMEZONE } from "@/lib/config";
 
 type ResultState = {
   tone: "ok" | "bad" | "warn";
@@ -43,6 +44,13 @@ export function KioskClient() {
   const [pinReason, setPinReason] = useState("");
   const [supervisorPin, setSupervisorPin] = useState("");
   const [showPin, setShowPin] = useState(false);
+  const [binding, setBinding] = useState<TerminalBinding | null>(null);
+  const [bindingChecked, setBindingChecked] = useState(false);
+
+  useEffect(() => {
+    setBinding(getTerminal());
+    setBindingChecked(true);
+  }, []);
 
   const site = useMemo(
     () => sites.find((s) => s.id === siteId || s.code === siteId),
@@ -52,8 +60,8 @@ export function KioskClient() {
   useEffect(() => {
     const tick = () =>
       setClock(
-        new Intl.DateTimeFormat("es-CR", {
-          timeZone: "America/Costa_Rica",
+        new Intl.DateTimeFormat(LOCALE, {
+          timeZone: TIMEZONE,
           weekday: "short",
           hour: "2-digit",
           minute: "2-digit",
@@ -90,8 +98,10 @@ export function KioskClient() {
       .then(({ sites: rows }) => {
         setSites(rows);
         const wanted = querySite?.toUpperCase();
-        const match =
-          rows.find((s) => s.code === wanted || s.id === querySite) ?? rows[0];
+        // Una terminal activada queda atada a su sede.
+        const match = binding
+          ? rows.find((s) => s.id === binding.siteId)
+          : (rows.find((s) => s.code === wanted || s.id === querySite) ?? rows[0]);
         if (match) setSiteId(match.id);
         setLoadError(null);
       })
@@ -100,7 +110,7 @@ export function KioskClient() {
           err instanceof Error ? err.message : "No se pudieron cargar las sedes",
         );
       });
-  }, [querySite]);
+  }, [querySite, binding]);
 
   useEffect(() => {
     void api.catalog().then((c) => {
@@ -142,15 +152,19 @@ export function KioskClient() {
   }, []);
 
   useEffect(() => {
-    if (siteId) void loadGallery(siteId);
-  }, [siteId, loadGallery]);
+    if (siteId && binding) void loadGallery(siteId);
+  }, [siteId, binding, loadGallery]);
 
   useEffect(() => {
     void refreshQueue();
   }, [refreshQueue]);
 
   useEffect(() => {
-    if (!siteId) return;
+    if (!siteId || !binding) return;
+    // Si el servidor revocó la terminal, api-client borra el token: volver a activar.
+    const recheck = () => {
+      if (!getTerminal()) setBinding(null);
+    };
     const ping = () => {
       if (!navigator.onLine) return;
       void api
@@ -161,16 +175,16 @@ export function KioskClient() {
           userAgent: navigator.userAgent,
           path: "/kiosk",
         })
-        .catch(() => undefined);
+        .then(recheck, recheck);
     };
     ping();
     const id = window.setInterval(ping, 12000);
     return () => window.clearInterval(id);
-  }, [siteId, site?.code]);
+  }, [siteId, site?.code, binding]);
 
   useEffect(() => {
     async function syncNow() {
-      if (!navigator.onLine) return;
+      if (!navigator.onLine || !getTerminal()) return;
       setSyncing(true);
       await flushQueue();
       await refreshQueue();
@@ -179,7 +193,7 @@ export function KioskClient() {
     window.addEventListener("online", syncNow);
     if (navigator.onLine) void syncNow();
     return () => window.removeEventListener("online", syncNow);
-  }, [refreshQueue]);
+  }, [refreshQueue, binding]);
 
   const enrolledCount = gallery.filter((g) => g.descriptors.length > 0).length;
 
@@ -337,6 +351,13 @@ export function KioskClient() {
     }
   }
 
+  // Sin terminal activada no se monta la cámara ni se descarga la galería.
+  if (!binding) {
+    return bindingChecked ? (
+      <KioskActivation initialSite={querySite} onActivated={setBinding} />
+    ) : null;
+  }
+
   return (
     <AppShell
       title={site ? site.name : loadError ? "Sin sede" : "Cargando sede…"}
@@ -344,9 +365,6 @@ export function KioskClient() {
       actions={
         <>
           <OfflineBadge online={online} queued={queued} syncing={syncing} />
-          {sites.length > 0 && (
-            <SitePicker sites={sites} value={siteId} onChange={setSiteId} />
-          )}
         </>
       }
     >

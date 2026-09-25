@@ -5,8 +5,8 @@ El oferente **rellena** estos bloques. Reloj CR no finge certificados, stock de 
 ## S05 — Declaración de región cloud
 
 - Proveedor: ______________________________
-- Región / AZ: ____________________________ (p. ej. propuesta `cam` / on-prem CR)
-- Residencia de datos: Costa Rica / otra: ________
+- Región / AZ: ____________________________ (p. ej. `us-east` / on-prem Colombia)
+- Residencia de datos: Colombia / otra: ________ (transferencia internacional: Ley 1581 art. 26)
 - Subprocesadores: ________________________
 - Fecha de vigencia: ______________________
 

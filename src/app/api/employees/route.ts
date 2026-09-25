@@ -1,10 +1,12 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireActor, requireAdmin } from "@/lib/auth";
 import { createEmployee, listEmployees } from "@/lib/db";
 import { badRequest, json, parseJson, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
 export function GET(request: Request) {
+  const actor = requireActor(request);
+  if (actor instanceof Response) return actor;
   const site = new URL(request.url).searchParams.get("site") ?? undefined;
   return json({ employees: listEmployees(site) });
 }

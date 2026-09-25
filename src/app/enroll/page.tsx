@@ -252,9 +252,13 @@ export default function EnrollPage() {
             <label className="consent-box">
               <Checkbox checked={consent} onCheckedChange={(value) => setConsent(Boolean(value))} />
               <span>
-                Autorizo el tratamiento de mi plantilla facial (Ley 8968).
-                Plantillas cifradas en reposo (AES-GCM). No se guardan fotos.
-                Queda auditoría de operador, sede y user-agent.
+                Autorizo de forma previa, expresa e informada el tratamiento de
+                mi plantilla facial, dato sensible (Ley 1581 de 2012 y Decreto
+                1377 de 2013), solo para registrar mi asistencia. No estoy
+                obligado(a) a autorizarlo: puedo marcar con PIN de supervisor. Puedo
+                conocer, actualizar, rectificar y revocar esta autorización y
+                pedir la supresión del dato. Plantillas cifradas (AES-GCM); no
+                se guardan fotos. Queda auditoría de operador, sede y user-agent.
               </span>
             </label>
             <div className="flex flex-wrap gap-2">

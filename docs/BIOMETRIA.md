@@ -9,7 +9,7 @@ Este documento declara umbrales, pipeline y límites del control facial **en el 
 3. Alineación: Face Landmark 68.
 4. Descriptor: FaceRecognitionNet **128-d**.
 5. Matching 1:N en el cliente (y `POST /api/identify` como respaldo online).
-6. Plantillas cifradas en reposo con AES-256-GCM (`TEMPLATE_KEY` / `DEMO_API_KEY`). **No se guardan fotos.**
+6. Plantillas cifradas en reposo con AES-256-GCM (`TEMPLATE_KEY`, obligatorio en producción). **No se guardan fotos.**
 
 Modelos servidos desde `/public/models` (~6.8 MB la primera vez).
 

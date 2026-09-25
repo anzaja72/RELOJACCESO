@@ -38,7 +38,7 @@ for (const type of ["IN", "OUT"]) {
   });
 }
 
-const scan = await req("POST", "/api/v1/anomalies?day=" + new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date()));
+const scan = await req("POST", "/api/v1/anomalies?day=" + new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date()));
 if (!scan.anomalies?.some((a) => a.kind === "pin_fallback_spike")) {
   throw new Error("expected pin_fallback_spike");
 }

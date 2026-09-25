@@ -6,6 +6,8 @@ services:
   - type: web
     name: reloj-cr
     runtime: docker
+    # Región de Render más cercana a Colombia (menor latencia). Solo aplica al crear el servicio.
+    region: virginia
     plan: starter
     healthCheckPath: /api/health
     dockerContext: .
@@ -21,10 +23,17 @@ services:
         value: 0.0.0.0
       - key: NODE_ENV
         value: production
+      # Firmas de sesión y cifrado de plantillas. Render los genera una sola vez;
+      # no los regenere: cambiar TEMPLATE_KEY obliga a re-enrolar a todos.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TEMPLATE_KEY
+        generateValue: true
+      # Solo integraciones servidor a servidor (la UI usa sesión JWT).
       - key: DEMO_API_KEY
         generateValue: true
-      - key: NEXT_PUBLIC_DEMO_API_KEY
-        sync: false
+      # ADMIN_PASSWORD (12+ caracteres) y SUPERVISOR_PIN (6+ dígitos) son
+      # obligatorios: sin ellos el servicio no arranca.
       - key: ADMIN_PASSWORD
         sync: false
       - key: SUPERVISOR_PIN

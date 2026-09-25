@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { ulid } from "ulidx";
-import { TERMINAL_ONLINE_MS } from "@/lib/config";
+import { TERMINAL_ONLINE_MS, TIMEZONE, UTC_OFFSET } from "@/lib/config";
 import { dispatchWebhook } from "@/lib/webhook";
 import type {
   AttendanceRow,
@@ -17,6 +17,7 @@ import type {
 } from "@/lib/types";
 
 import { openJson, sealJson } from "@/lib/crypto-box";
+import { adminPassword, supervisorPin } from "@/lib/secrets";
 import { hashPassword } from "@/lib/session";
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -124,16 +125,16 @@ function seed(db: Database.Database) {
     {
       id: "site_r01",
       code: "R01",
-      name: "Soda El Parque",
-      city: "San José",
-      timezone: "America/Costa_Rica",
+      name: "Restaurante La Candelaria",
+      city: "Bogotá",
+      timezone: TIMEZONE,
     },
     {
       id: "site_r02",
       code: "R02",
       name: "Mariscos del Caribe",
-      city: "Limón",
-      timezone: "America/Costa_Rica",
+      city: "Barranquilla",
+      timezone: TIMEZONE,
     },
   ];
 
@@ -290,29 +291,29 @@ function migrateV2(db: Database.Database) {
   const country = db.prepare("SELECT COUNT(*) as n FROM countries").get() as { n: number };
   if (country.n === 0) {
     db.prepare("INSERT INTO countries (id, code, name) VALUES (?,?,?)").run(
-      "cty_cr",
-      "CR",
-      "Costa Rica",
+      "cty_co",
+      "CO",
+      "Colombia",
     );
     db.prepare("INSERT INTO zones (id, country_id, code, name) VALUES (?,?,?,?)").run(
-      "zone_gam",
-      "cty_cr",
-      "GAM",
-      "Gran Área Metropolitana",
+      "zone_andina",
+      "cty_co",
+      "AND",
+      "Región Andina",
     );
     db.prepare("INSERT INTO zones (id, country_id, code, name) VALUES (?,?,?,?)").run(
       "zone_caribe",
-      "cty_cr",
+      "cty_co",
       "CAR",
-      "Caribe",
+      "Región Caribe",
     );
     db.prepare("UPDATE sites SET country_id=?, zone_id=? WHERE id=?").run(
-      "cty_cr",
-      "zone_gam",
+      "cty_co",
+      "zone_andina",
       "site_r01",
     );
     db.prepare("UPDATE sites SET country_id=?, zone_id=? WHERE id=?").run(
-      "cty_cr",
+      "cty_co",
       "zone_caribe",
       "site_r02",
     );
@@ -321,13 +322,13 @@ function migrateV2(db: Database.Database) {
   const users = db.prepare("SELECT COUNT(*) as n FROM users").get() as { n: number };
   if (users.n === 0) {
     const now = new Date().toISOString();
-    const pass = hashPassword(process.env.ADMIN_PASSWORD || "RelojCR-Admin-2026!");
+    const pass = hashPassword(adminPassword());
     const insert = db.prepare(
       `INSERT INTO users (id,email,name,role,scope_type,scope_id,password_hash,totp_secret,totp_enabled,active,created_at)
        VALUES (?,?,?,?,?,?,?,?,0,1,?)`,
     );
     insert.run("usr_admin", "admin@reloj.cr", "Superadmin", "superadmin", "all", null, pass, null, now);
-    insert.run("usr_zona", "zona@reloj.cr", "Gerente GAM", "zone_manager", "zone", "zone_gam", pass, null, now);
+    insert.run("usr_zona", "zona@reloj.cr", "Gerente Región Andina", "zone_manager", "zone", "zone_andina", pass, null, now);
     insert.run("usr_sede", "sede@reloj.cr", "Gerente R01", "site_manager", "site", "site_r01", pass, null, now);
     insert.run("usr_op", "operador@reloj.cr", "Operador kiosco", "operator", "site", "site_r01", pass, null, now);
     insert.run("usr_audit", "auditor@reloj.cr", "Auditor", "auditor", "all", null, pass, null, now);
@@ -353,8 +354,8 @@ function migrateV2(db: Database.Database) {
   const set = db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)");
   set.run("event_types", JSON.stringify(["IN", "OUT", "BREAK_START", "BREAK_END"]));
   set.run("retention_days", "365");
-  set.run("cloud_region_declared", "America/Costa_Rica — declarar región contractual en S05");
-  set.run("supervisor_pin", hashPassword(process.env.SUPERVISOR_PIN || "2468"));
+  set.run("cloud_region_declared", "America/Bogota — declarar región contractual en S05");
+  set.run("supervisor_pin", hashPassword(supervisorPin()));
   set.run("product_edition", "oferta-software-v1");
   set.run("alert_absent", "1");
   set.run("alert_late", "1");
@@ -394,6 +395,12 @@ function migrateV3(db: Database.Database) {
       UNIQUE(kind, site_id, day)
     );
   `);
+  // Terminales activadas por un usuario: el token del kiosco se valida contra token_id.
+  if (!hasColumn(db, "terminals", "token_id")) {
+    db.exec("ALTER TABLE terminals ADD COLUMN token_id TEXT");
+    db.exec("ALTER TABLE terminals ADD COLUMN activated_by TEXT");
+    db.exec("ALTER TABLE terminals ADD COLUMN revoked_at TEXT");
+  }
   globalForDb.__bioV3 = true;
 }
 
@@ -810,7 +817,7 @@ export function listPunches(filters: {
   return rows.map(mapPunch);
 }
 
-export function todayBounds(timezone = "America/Costa_Rica") {
+export function todayBounds(timezone = TIMEZONE) {
   const now = new Date();
   const local = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -818,8 +825,8 @@ export function todayBounds(timezone = "America/Costa_Rica") {
     month: "2-digit",
     day: "2-digit",
   }).format(now);
-  const start = new Date(`${local}T00:00:00-06:00`).toISOString();
-  const end = new Date(`${local}T23:59:59.999-06:00`).toISOString();
+  const start = new Date(`${local}T00:00:00${UTC_OFFSET}`).toISOString();
+  const end = new Date(`${local}T23:59:59.999${UTC_OFFSET}`).toISOString();
   return { start, end, localDate: local };
 }
 
@@ -877,6 +884,50 @@ export function heartbeat(input: {
     );
 }
 
+export function activateTerminal(input: {
+  siteId: string;
+  label?: string;
+  userAgent: string;
+  activatedBy: string;
+}) {
+  const site = getSiteByCode(input.siteId);
+  if (!site) throw new Error("Sede no encontrada");
+  const terminalId = ulid();
+  const tokenId = ulid();
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path, token_id, activated_by)
+     VALUES (?, ?, ?, ?, ?, '/kiosk', ?, ?)`,
+  ).run(
+    terminalId,
+    site.id,
+    input.label?.trim() || `Kiosco ${site.code}`,
+    new Date().toISOString(),
+    input.userAgent,
+    tokenId,
+    input.activatedBy,
+  );
+  recordEvent(db, "terminal.activated", { terminalId, siteId: site.id, by: input.activatedBy });
+  return { terminalId, tokenId, site };
+}
+
+/** true si el token sigue siendo el vigente de esa terminal y no fue revocado. */
+export function terminalTokenActive(terminalId: string, tokenId: string) {
+  const row = getDb()
+    .prepare("SELECT token_id, revoked_at FROM terminals WHERE id = ?")
+    .get(terminalId) as { token_id: string | null; revoked_at: string | null } | undefined;
+  return Boolean(row && row.token_id === tokenId && !row.revoked_at);
+}
+
+export function revokeTerminal(terminalId: string, by: string) {
+  const db = getDb();
+  const result = db
+    .prepare("UPDATE terminals SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+    .run(new Date().toISOString(), terminalId);
+  if (result.changes) recordEvent(db, "terminal.revoked", { terminalId, by });
+  return result.changes > 0;
+}
+
 export function listTerminals(): Terminal[] {
   const rows = getDb()
     .prepare("SELECT * FROM terminals ORDER BY last_seen DESC")
@@ -890,6 +941,7 @@ export function listTerminals(): Terminal[] {
     userAgent: String(row.user_agent),
     path: String(row.path),
     online: now - new Date(String(row.last_seen)).getTime() < TERMINAL_ONLINE_MS,
+    revoked: Boolean(row.revoked_at),
   }));
 }
 

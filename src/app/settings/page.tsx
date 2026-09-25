@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api-client";
-import { getToken } from "@/lib/client-session";
-import { PUBLIC_API_KEY } from "@/lib/config";
+import { authHeaders } from "@/lib/client-session";
 
 type UserRow = {
   id: string;
@@ -67,10 +66,7 @@ export default function SettingsPage() {
   }
 
   async function applyRetention() {
-    const token = getToken();
-    const headers: Record<string, string> = token
-      ? { Authorization: `Bearer ${token}` }
-      : { "X-API-Key": PUBLIC_API_KEY };
+    const headers = authHeaders();
     const res = await fetch("/api/v1/settings/retention", {
       method: "POST",
       headers,

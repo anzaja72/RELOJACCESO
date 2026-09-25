@@ -1,6 +1,6 @@
 # Reloj CR · Oferta software v1
 
-Asistencia biométrica para restaurantes (RFP-BIO-2026-01, Costa Rica). **100 % navegador**, misma URL en tablet Android o Chromium en Raspberry Pi. No hay Electron, ni agente nativo, ni drivers USB de RFID/huella.
+Asistencia biométrica para restaurantes (RFP-BIO-2026-01), configurada para **Colombia**: zona horaria `America/Bogota` (UTC−5), formato `es-CO` y consentimiento biométrico según la Ley 1581 de 2012. **100 % navegador**, misma URL en tablet Android o Chromium en Raspberry Pi. No hay Electron, ni agente nativo, ni drivers USB de RFID/huella.
 
 La modalidad alternativa (F08 / B05) es **PIN o código de supervisor con motivo y bitácora**.
 
@@ -27,7 +27,7 @@ El servidor escucha en `0.0.0.0:47321`.
 | --- | --- |
 | Kiosco facial, enrolamiento, cola offline, dashboard ≤60 s | SLA telefónico, RMA y stock de tablets/Pi (SV02–SV05) |
 | API `/api/v1`, JWT + API key, sandbox, webhooks | Certificados ISO/SOC (S07) |
-| RBAC, correcciones, novedades, alertas, exportaciones | Región cloud real en Costa Rica (S05) — hay plantilla |
+| RBAC, correcciones, novedades, alertas, exportaciones | Región cloud contractual (S05) — hay plantilla |
 | AES-GCM de plantillas, backup de archivo, retención | Ensayo FAR/FRR / PAD ISO 30107 |
 
 Matriz: [`docs/RFP_COMPLIANCE.md`](docs/RFP_COMPLIANCE.md). Biometría: [`docs/BIOMETRIA.md`](docs/BIOMETRIA.md). Salida: [`docs/EXIT_PLAN.md`](docs/EXIT_PLAN.md). Plantillas: [`docs/CONTRACT_TEMPLATES.md`](docs/CONTRACT_TEMPLATES.md).
@@ -55,20 +55,25 @@ Next.js solo sirve `/_next` a orígenes permitidos. La config añade `127.0.0.1`
 | Vía | Uso |
 | --- | --- |
 | `POST /api/v1/auth/login` | JWT 12 h (UI admin). TOTP opcional: `POST /api/v1/auth/totp` |
-| `X-API-Key` / `Bearer` | Integraciones. Clave de fábrica: `demo-rfp-bio-2026` |
+| `POST /api/v1/terminals/activate` | Token de kiosco (1 año, atado a una sede). Lo pide un operador o superior desde `/kiosk` |
+| `X-API-Key` / `Bearer` | Solo integraciones servidor a servidor (`DEMO_API_KEY`). La UI no la usa |
 | `GET /api/v1/auth/oidc` | Stub: documenta el camino a un IdP empresarial |
 
-Usuarios semilla (contraseña `RelojCR-Admin-2026!` o `ADMIN_PASSWORD`):
+Usuarios semilla (contraseña = `ADMIN_PASSWORD`; en desarrollo, `RelojCR-Admin-2026!`):
 
 | Correo | Rol | Alcance |
 | --- | --- | --- |
 | admin@reloj.cr | superadmin | todo |
-| zona@reloj.cr | zone_manager | GAM |
+| zona@reloj.cr | zone_manager | Región Andina |
 | sede@reloj.cr | site_manager | R01 |
 | operador@reloj.cr | operator | R01 |
 | auditor@reloj.cr | auditor | lectura |
 
-PIN de supervisor de fábrica: `2468` (`SUPERVISOR_PIN`). **No es un secreto de producción.**
+PIN de supervisor: `SUPERVISOR_PIN` (en desarrollo, `2468`).
+
+### Kiosco
+
+Cada tablet se activa una vez en `/kiosk`: un operador, gerente o admin elige la sede e ingresa sus credenciales (no quedan guardadas). El kiosco recibe un token de terminal que solo sirve para su sede: descargar la galería, marcar, sincronizar la cola offline y enviar heartbeat. Si se pierde la tablet: `POST /api/v1/terminals/{id}/revoke` (gerente de sede o superior).
 
 OIDC: configurar `OIDC_ISSUER` + `OIDC_CLIENT_ID` y mapear grupos a los cinco roles. El stub no inicia un flujo real.
 
@@ -117,8 +122,8 @@ Webhooks opcionales (`WEBHOOK_URL`, `WEBHOOK_SECRET`): eventos `punch.created`, 
 
 | Código | Sede | Ciudad | Zona |
 | --- | --- | --- | --- |
-| R01 | Soda El Parque | San José | GAM |
-| R02 | Mariscos del Caribe | Limón | Caribe |
+| R01 | Restaurante La Candelaria | Bogotá | Región Andina |
+| R02 | Mariscos del Caribe | Barranquilla | Región Caribe |
 
 Colaboradores de ejemplo sin cara hasta enrolar: María Solís, Carlos Méndez, Ana Vargas, Luis Herrera, Sofía Jiménez. Turnos lun–vie 07:00–16:00, gracia 10 min.
 
@@ -133,21 +138,25 @@ Colaboradores de ejemplo sin cara hasta enrolar: María Solís, Carlos Méndez, 
 
 OpenAPI: [/openapi.yaml](/openapi.yaml) y `GET /api/v1/openapi`.
 
-Público (kiosco): `GET /api/sites`, `GET /api/templates`, `POST /api/punches`, `POST /api/sync`, `POST /api/v1/punches/pin`, `GET /api/v1/catalog`.
+Público: `GET /api/sites`, `GET /api/v1/catalog`, `GET /api/health` (solo `ok`; el detalle exige sesión), OpenAPI.
 
-Autenticado: `/api/v1/employees`, `/punches`, `/reports`, `/exports/pack`, `/corrections`, `/settings`, `/alerts`.
+Token de terminal (o usuario con escritura): `GET /api/templates`, `POST /api/identify`, `POST /api/punches`, `POST /api/sync`, `POST /api/v1/punches`, `POST /api/v1/punches/pin`, `POST /api/terminals/heartbeat`, `POST /api/v1/alerts`.
+
+Sesión de usuario: todo lo demás (`/api/employees`, `/api/punches` GET, `/api/terminals`, `/api/v1/employees`, `/reports`, `/exports/pack`, `/corrections`, `/settings`, …).
 
 ## Variables
 
 Copie `.env.example` → `.env.local`. No suba secretos reales.
 
-| Variable | Default | Uso |
+En producción (`NODE_ENV=production`) el servidor **no arranca** sin `JWT_SECRET`, `TEMPLATE_KEY`, `ADMIN_PASSWORD` y `SUPERVISOR_PIN`, y rechaza los valores de fábrica. Los defaults de la tabla solo aplican en desarrollo.
+
+| Variable | Default (solo dev) | Uso |
 | --- | --- | --- |
-| `DEMO_API_KEY` | `demo-rfp-bio-2026` | Clave API |
-| `ADMIN_PASSWORD` | `RelojCR-Admin-2026!` | Semilla de usuarios |
-| `SUPERVISOR_PIN` | `2468` | Respaldo F08 |
-| `TEMPLATE_KEY` | deriva de API key | AES-GCM plantillas |
-| `JWT_SECRET` | deriva de API key | Firma JWT |
+| `JWT_SECRET` | fijo de dev | Firma de sesiones y tokens de kiosco (32+) |
+| `TEMPLATE_KEY` | `DEMO_API_KEY` o fijo de dev | AES-GCM plantillas (32+). No lo cambie tras enrolar |
+| `ADMIN_PASSWORD` | `RelojCR-Admin-2026!` | Semilla de usuarios (12+) |
+| `SUPERVISOR_PIN` | `2468` | Respaldo F08 (6+) |
+| `DEMO_API_KEY` | `demo-rfp-bio-2026` | Integraciones; en prod 24+ caracteres o se desactiva |
 | `SANDBOX` | unset | DB aparte |
 | `DATA_DIR` | `./data` | SQLite |
 | `WEBHOOK_URL` / `WEBHOOK_SECRET` | unset | HMAC |

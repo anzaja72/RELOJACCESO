@@ -88,7 +88,7 @@ const pin = await req("POST", "/api/v1/punches/pin", {
   terminalId: "smoke-term",
   reason: "Falla facial simulada",
   supervisorPin: process.env.SUPERVISOR_PIN || "2468",
-}, false);
+});
 if (!pin.created) throw new Error("pin punch");
 
 const pack = await req("GET", "/api/v1/exports/pack?format=json");

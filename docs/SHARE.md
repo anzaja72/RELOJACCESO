@@ -18,7 +18,7 @@ ngrok http 47321
 
 Mándale la URL `https://….trycloudflare.com` (o `ngrok.io`).
 
-Dile que entre a `/login` con `admin@reloj.cr` / `RelojCR-Admin-2026!` y que **cambie esa clave** si el túnel queda abierto más de un rato.
+Dile que entre a `/login` con `admin@reloj.cr` y la `ADMIN_PASSWORD` que configuraste. Con `npm run dev` y sin `.env.local` la clave es la de fábrica (`RelojCR-Admin-2026!`): **no dejes un túnel abierto así**.
 
 Si Next bloquea `/_next` desde el host del túnel:
 
@@ -52,10 +52,8 @@ Ponga Caddy o nginx con un certificado delante de `:47321`. Sin HTTPS el kiosco 
 - No use `SANDBOX=true` y producción en el mismo archivo SQLite.
 - El preview de Cursor (`127.0.0.1`) no es compartible con terceros.
 
-## Credenciales de fábrica (cámbielas en el demo)
+## Credenciales
 
-| Usuario | Clave |
-| --- | --- |
-| admin@reloj.cr | RelojCR-Admin-2026! |
-| PIN supervisor | 2468 |
-| API | demo-rfp-bio-2026 |
+En producción (Docker / Render) no hay valores de fábrica: se usan `ADMIN_PASSWORD`, `SUPERVISOR_PIN` y `DEMO_API_KEY` del entorno. Solo `npm run dev` sin `.env.local` usa `RelojCR-Admin-2026!` / `2468` / `demo-rfp-bio-2026`.
+
+El kiosco se activa una vez por tablet con un usuario operador o superior.

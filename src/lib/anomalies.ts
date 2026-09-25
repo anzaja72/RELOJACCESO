@@ -1,6 +1,7 @@
 import { ulid } from "ulidx";
 import { getDb, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
-import { reportForDay, todayCR } from "@/lib/db-ops";
+import { reportForDay, todayLocal } from "@/lib/db-ops";
+import { TIMEZONE, dayBoundsUtc, localNoon } from "@/lib/config";
 
 export type AnomalyRow = {
   id: string;
@@ -107,18 +108,17 @@ function upsertAnomaly(input: {
 }
 
 function shiftDay(day: string, delta: number) {
-  const d = new Date(`${day}T12:00:00-06:00`);
+  const d = new Date(localNoon(day));
   d.setDate(d.getDate() + delta);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(d);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(d);
 }
 
 export function scanAnomalies(day?: string) {
-  const d = day || todayCR();
-  const from = `${d}T00:00:00-06:00`;
-  const to = `${d}T23:59:59.999-06:00`;
+  const d = day || todayLocal();
+  const { from, to } = dayBoundsUtc(d);
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
-      timeZone: "America/Costa_Rica",
+      timeZone: TIMEZONE,
       hour: "2-digit",
       hour12: false,
     }).format(new Date()),

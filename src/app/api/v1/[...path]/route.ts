@@ -2,15 +2,19 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { ulid } from "ulidx";
 import {
+  isKioskDenied,
   isResponse,
+  kioskSite,
+  kioskTerminalId,
   readActor,
+  requireKiosk,
   requireActor,
   requireAdmin,
   requireApprover,
   requireWrite,
   type Actor,
 } from "@/lib/auth";
-import { APP, DUPLICATE_COOLDOWN_MS } from "@/lib/config";
+import { APP, DUPLICATE_COOLDOWN_MS, TIMEZONE } from "@/lib/config";
 import {
   applyRetention,
   dumpMasters,
@@ -45,6 +49,7 @@ import {
   ackAlert,
 } from "@/lib/db-ops";
 import {
+  activateTerminal,
   createEmployee,
   getDb,
   getEmployee,
@@ -55,6 +60,7 @@ import {
   patchEmployee,
   recentDuplicate,
   recordEvent,
+  revokeTerminal,
   statsToday,
   upsertPunch,
 } from "@/lib/db";
@@ -62,7 +68,9 @@ import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http"
 import { toCsv, toSimplePdf, toXlsx, zipStore } from "@/lib/pack";
 import {
   newTotpSecret,
+  signTerminalToken,
   signToken,
+  TERMINAL_TOKEN_HOURS,
   totpCode,
   verifyPassword,
   verifyTotp,
@@ -89,15 +97,19 @@ async function handleGet(request: Request, parts: string[]) {
 
   if (route === "health") {
     getDb();
+    const base = {
+      ok: true,
+      edition: APP.edition,
+      sandbox: process.env.SANDBOX === "true",
+      rfp: APP.rfp,
+      time: new Date().toISOString(),
+      timezone: TIMEZONE,
+    };
+    if (!readActor(request)) return json(base, 200, request);
     ensureOfflineAlerts();
     return json(
       {
-        ok: true,
-        edition: APP.edition,
-        sandbox: process.env.SANDBOX === "true",
-        rfp: APP.rfp,
-        time: new Date().toISOString(),
-        timezone: "America/Costa_Rica",
+        ...base,
         terminals: listTerminals(),
         today: statsToday(),
         rateLimit: { windowSec: 60, max: 80, loginMax: 10 },
@@ -411,6 +423,53 @@ async function handlePost(request: Request, parts: string[]) {
     );
   }
 
+  if (route === "terminals/activate") {
+    const limited = rateLimit(request, 10);
+    if (limited) return limited;
+    const actor = requireWrite(request);
+    if (isResponse(actor)) return actor;
+    try {
+      const body = await parseJson<{ siteId?: string; label?: string }>(request);
+      if (!body.siteId) return badRequest("siteId es obligatorio", { code: "VALIDATION" }, request);
+      const allowed = listSitesScoped(scopeOf(actor));
+      if (!allowed.some((s) => s.id === body.siteId || s.code === body.siteId)) {
+        return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+      }
+      const terminal = activateTerminal({
+        siteId: body.siteId,
+        label: body.label,
+        userAgent: request.headers.get("user-agent") || "unknown",
+        activatedBy: actor.email,
+      });
+      const token = signTerminalToken({
+        terminalId: terminal.terminalId,
+        siteId: terminal.site.id,
+        tokenId: terminal.tokenId,
+      });
+      return json(
+        {
+          token,
+          terminalId: terminal.terminalId,
+          site: terminal.site,
+          expiresHours: TERMINAL_TOKEN_HOURS,
+        },
+        201,
+        request,
+      );
+    } catch (error) {
+      return serverError(error, request);
+    }
+  }
+
+  if (parts[0] === "terminals" && parts[1] && parts[2] === "revoke" && parts.length === 3) {
+    const actor = requireApprover(request);
+    if (isResponse(actor)) return actor;
+    if (!revokeTerminal(parts[1], actor.email)) {
+      return json({ error: "Terminal no encontrada o ya revocada", code: "NOT_FOUND" }, 404, request);
+    }
+    return json({ ok: true }, 200, request);
+  }
+
   if (route === "employees") {
     const actor = requireWrite(request);
     if (isResponse(actor)) return actor;
@@ -441,6 +500,8 @@ async function handlePost(request: Request, parts: string[]) {
   if (route === "punches" || route === "punches/pin") {
     const limited = rateLimit(request, 40);
     if (limited) return limited;
+    const caller = requireKiosk(request);
+    if (isKioskDenied(caller)) return caller;
     try {
       const body = await parseJson<
         Partial<SyncItem> & {
@@ -449,6 +510,8 @@ async function handlePost(request: Request, parts: string[]) {
           employeePin?: string;
         }
       >(request);
+      body.siteId = kioskSite(caller, body.siteId);
+      body.terminalId = kioskTerminalId(caller, body.terminalId);
       if (!body.siteId || !body.type || !body.terminalId) {
         return badRequest("siteId, type y terminalId son obligatorios", { code: "VALIDATION" }, request);
       }
@@ -602,6 +665,8 @@ async function handlePost(request: Request, parts: string[]) {
   if (route === "alerts") {
     const limited = rateLimit(request, 20);
     if (limited) return limited;
+    const caller = requireKiosk(request);
+    if (isKioskDenied(caller)) return caller;
     const body = await parseJson<{ type?: string; message?: string; siteId?: string; employeeId?: string }>(
       request,
     );

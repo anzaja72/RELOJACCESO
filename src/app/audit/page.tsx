@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { api } from "@/lib/api-client";
+import { LOCALE } from "@/lib/config";
 
 type EventRow = {
   id: string;
@@ -41,7 +42,7 @@ export default function AuditPage() {
               onClick={() => setSelected(event)}
             >
               <strong>{event.type}</strong>
-              <span>{new Date(event.created_at).toLocaleString("es-CR")}</span>
+              <span>{new Date(event.created_at).toLocaleString(LOCALE)}</span>
             </button>
           ))}
           {events.length === 0 && !error && <p className="empty">Sin eventos.</p>}

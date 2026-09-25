@@ -1,7 +1,17 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { DEMO_API_KEY } from "@/lib/config";
+import { getSiteByCode, terminalTokenActive } from "@/lib/db";
 import { json } from "@/lib/http";
-import { canApprove, canWrite, verifyToken, type Role, type SessionUser } from "@/lib/session";
+import { integrationApiKey } from "@/lib/secrets";
+import {
+  canApprove,
+  canWrite,
+  verifyTerminalToken,
+  verifyToken,
+  type Role,
+  type SessionUser,
+  type TerminalSession,
+} from "@/lib/session";
 
 export type Actor = SessionUser & { via: "jwt" | "api_key" };
 
@@ -25,10 +35,17 @@ export function readApiKey(request: Request): string | null {
   return null;
 }
 
+function sameSecret(a: string, b: string) {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 export function readActor(request: Request): Actor | null {
   const key = readApiKey(request);
   if (!key) return null;
-  if (key === DEMO_API_KEY) return API_ACTOR;
+  const apiKey = integrationApiKey();
+  if (apiKey && sameSecret(key, apiKey)) return API_ACTOR;
   const session = verifyToken(key);
   if (!session) return null;
   return { ...session, via: "jwt" };
@@ -83,4 +100,45 @@ export function isResponse(value: Actor | NextResponse): value is NextResponse {
 
 export function roleOf(actor: Actor): Role {
   return actor.role;
+}
+
+/**
+ * Quién puede marcar: una terminal activada (token de kiosco, atado a una sede)
+ * o un usuario con permiso de escritura probando el kiosco.
+ */
+export type KioskCaller =
+  | ({ kind: "terminal" } & TerminalSession)
+  | { kind: "user"; actor: Actor };
+
+export function requireKiosk(request: Request): KioskCaller | NextResponse {
+  const key = readApiKey(request);
+  const terminal = key ? verifyTerminalToken(key) : null;
+  if (terminal) {
+    if (!terminalTokenActive(terminal.terminalId, terminal.tokenId)) {
+      return json(
+        { error: "Terminal revocada o reemplazada. Actívela de nuevo.", code: "TERMINAL_REVOKED" },
+        401,
+        request,
+      );
+    }
+    return { kind: "terminal", ...terminal };
+  }
+  const actor = requireWrite(request);
+  if (actor instanceof NextResponse) return actor;
+  return { kind: "user", actor };
+}
+
+export function isKioskDenied(value: KioskCaller | NextResponse): value is NextResponse {
+  return value instanceof NextResponse;
+}
+
+/** Una terminal solo marca en su sede; un usuario puede elegir la sede. */
+export function kioskSite(caller: KioskCaller, requested?: string | null) {
+  if (caller.kind === "terminal") return caller.siteId;
+  if (!requested) return undefined;
+  return getSiteByCode(requested)?.id ?? requested;
+}
+
+export function kioskTerminalId(caller: KioskCaller, requested?: string | null) {
+  return caller.kind === "terminal" ? caller.terminalId : requested || "";
 }

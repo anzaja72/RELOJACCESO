@@ -1,3 +1,4 @@
+import { isKioskDenied, kioskSite, requireKiosk } from "@/lib/auth";
 import { MATCH_THRESHOLD } from "@/lib/config";
 import { getEmployee, listEmployees, listTemplates } from "@/lib/db";
 import { identifyFace } from "@/lib/match";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const limited = rateLimit(request);
   if (limited) return limited;
+  const caller = requireKiosk(request);
+  if (isKioskDenied(caller)) return caller;
   const body = await parseJson<{
     descriptor?: number[];
     siteId?: string;
@@ -16,8 +19,9 @@ export async function POST(request: Request) {
   if (!body.descriptor || body.descriptor.length !== 128) {
     return badRequest("descriptor de 128 dimensiones es obligatorio");
   }
-  const employees = listEmployees(body.siteId).filter((e) => e.active);
-  const templates = listTemplates(body.siteId);
+  const siteId = kioskSite(caller, body.siteId);
+  const employees = listEmployees(siteId).filter((e) => e.active);
+  const templates = listTemplates(siteId);
   const gallery = employees.map((employee) => ({
     employee,
     descriptors: templates

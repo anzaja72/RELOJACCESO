@@ -13,11 +13,14 @@ Hay dos caminos. En Windows, **Docker Desktop es el más simple** (evita compila
 ```powershell
 cd C:\reloj-cr
 copy .env.example .env
+notepad .env
 docker compose up --build
 ```
 
+En `.env` complete `JWT_SECRET` y `TEMPLATE_KEY` (32+ caracteres cada uno), `ADMIN_PASSWORD` (12+) y `SUPERVISOR_PIN` (6+ dígitos). Sin ellos Docker no arranca el servicio.
+
 4. En el navegador: [http://127.0.0.1:47321](http://127.0.0.1:47321)
-5. Login: `admin@reloj.cr` / `RelojCR-Admin-2026!`
+5. Login: `admin@reloj.cr` / la `ADMIN_PASSWORD` de `.env`
 
 La primera vez tarda (compila la imagen). SQLite queda en el volumen Docker `reloj-data`, no en una carpeta visible.
 
@@ -51,12 +54,12 @@ Si `npm install` falla con errores de `node-gyp` / `better-sqlite3`, usa el **ca
 
 En `http://127.0.0.1:47321/kiosk?site=R01` Chrome suele pedir cámara. Si entran por IP de LAN (`http://192.168.…`) sin HTTPS, Chrome bloquea la cámara salvo que marquen ese origen en `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
 
-## Credenciales de fábrica
+## Credenciales
 
-| | |
-| --- | --- |
-| Admin | `admin@reloj.cr` / `RelojCR-Admin-2026!` |
-| PIN supervisor | `2468` |
-| API | `demo-rfp-bio-2026` |
+| | Docker (`.env`) | `npm run dev` sin `.env.local` |
+| --- | --- | --- |
+| Admin | `admin@reloj.cr` / `ADMIN_PASSWORD` | `RelojCR-Admin-2026!` |
+| PIN supervisor | `SUPERVISOR_PIN` | `2468` |
+| API | `DEMO_API_KEY` (opcional) | `demo-rfp-bio-2026` |
 
-Cámbialas en `.env` / `.env.local` si el demo queda más de un rato. IA (Nemotron) es opcional: sin `NVIDIA_API_KEY` el briefing y el chat siguen con SQL.
+El kiosco pide activarse la primera vez: elija la sede y entre con un usuario operador o superior. IA (Nemotron) es opcional: sin `NVIDIA_API_KEY` el briefing y el chat siguen con SQL.

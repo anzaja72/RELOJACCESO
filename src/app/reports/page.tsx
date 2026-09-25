@@ -6,9 +6,9 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api-client";
-import { getToken } from "@/lib/client-session";
-import { PUBLIC_API_KEY } from "@/lib/config";
+import { authHeaders } from "@/lib/client-session";
 import type { Employee, Site, Terminal } from "@/lib/types";
+import { LOCALE, TIMEZONE } from "@/lib/config";
 
 type Row = {
   employee: { id: string; name: string; code: string; siteId: string };
@@ -32,7 +32,7 @@ function ReportsPage() {
   const [employeeId, setEmployeeId] = useState(search.get("employee") || "");
   const [day, setDay] = useState(
     search.get("day") ||
-      new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date()),
+      new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date()),
   );
   const [status, setStatus] = useState(search.get("status") || "");
   const [rows, setRows] = useState<Row[]>([]);
@@ -104,10 +104,7 @@ function ReportsPage() {
   }, [countryId, zoneId, siteId, employeeId, day, status]);
 
   async function download(format: string) {
-    const token = getToken();
-    const headers: Record<string, string> = token
-      ? { Authorization: `Bearer ${token}` }
-      : { "X-API-Key": PUBLIC_API_KEY };
+    const headers = authHeaders();
     const res = await fetch(`/api/v1/exports/pack?format=${format}&site=${encodeURIComponent(siteId)}`, {
       headers,
     });
@@ -257,7 +254,7 @@ function ReportsPage() {
             <div key={t.id} className="row" style={{ padding: "10px 0" }}>
               <strong>{t.label}</strong>
               <span>
-                {t.online ? "En línea" : "Silencio"} · {new Date(t.lastSeen).toLocaleTimeString("es-CR")}
+                {t.online ? "En línea" : "Silencio"} · {new Date(t.lastSeen).toLocaleTimeString(LOCALE)}
               </span>
             </div>
           ))}

@@ -1,3 +1,4 @@
+import { isKioskDenied, kioskSite, kioskTerminalId, requireActor, requireKiosk } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { eventTypes } from "@/lib/db-ops";
 import { listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
@@ -7,6 +8,8 @@ import type { SyncItem } from "@/lib/types";
 export const runtime = "nodejs";
 
 export function GET(request: Request) {
+  const actor = requireActor(request);
+  if (actor instanceof Response) return actor;
   const url = new URL(request.url);
   const punches = listPunches({
     siteId: url.searchParams.get("site") ?? undefined,
@@ -22,10 +25,14 @@ export function GET(request: Request) {
 export async function POST(request: Request) {
   const limited = rateLimit(request);
   if (limited) return limited;
+  const caller = requireKiosk(request);
+  if (isKioskDenied(caller)) return caller;
   try {
     const body = await parseJson<Partial<SyncItem> & { offline?: boolean }>(
       request,
     );
+    body.siteId = kioskSite(caller, body.siteId);
+    body.terminalId = kioskTerminalId(caller, body.terminalId);
     if (!body.id || !body.siteId || !body.type || !body.capturedAt || !body.terminalId) {
       return badRequest("id, siteId, type, capturedAt y terminalId son obligatorios");
     }

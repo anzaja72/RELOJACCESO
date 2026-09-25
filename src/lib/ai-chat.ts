@@ -1,9 +1,10 @@
 import { generateBriefing } from "@/lib/ai-briefing";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { listPunches } from "@/lib/db";
-import { listCorrections, listEmployeesScoped, reportForDay, todayCR, type Scope } from "@/lib/db-ops";
+import { listCorrections, listEmployeesScoped, reportForDay, todayLocal, type Scope } from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
 import { listTerminals } from "@/lib/db";
+import { dayBoundsUtc } from "@/lib/config";
 
 export type ChatCite = { type: string; id: string };
 export type ChatAnswer = {
@@ -36,8 +37,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   const report = reportForDay({ day, siteId, scope });
   const punches = listPunches({
     siteId,
-    from: `${day}T00:00:00-06:00`,
-    to: `${day}T23:59:59.999-06:00`,
+    ...dayBoundsUtc(day),
     limit: 300,
   });
   if (intent === "present") {
@@ -171,7 +171,7 @@ export async function answerChat(input: {
   siteId?: string;
   scope?: Scope;
 }): Promise<ChatAnswer> {
-  const day = input.day || todayCR();
+  const day = input.day || todayLocal();
   const intent = detectIntent(input.question);
   if (intent === "refuse") {
     return { answer: REFUSE, intent, cites: [], source: "canned", missing: false };

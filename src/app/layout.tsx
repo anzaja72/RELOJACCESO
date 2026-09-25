@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { APP } from "@/lib/config";
+import { APP, LOCALE } from "@/lib/config";
 
 const sans = Inter({
   variable: "--font-sans",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es-CR" className={`${sans.variable} h-full antialiased`}>
+    <html lang={LOCALE} className={`${sans.variable} h-full antialiased`}>
       <body className="min-h-full">{children}</body>
     </html>
   );

@@ -1,4 +1,5 @@
 import type { Employee, Punch } from "@/lib/types";
+import { TIMEZONE } from "@/lib/config";
 
 export type Novelty =
   | "on_time"
@@ -25,7 +26,7 @@ function hmToMin(hm: string) {
   return h * 60 + m;
 }
 
-function localParts(iso: string, tz = "America/Costa_Rica") {
+function localParts(iso: string, tz = TIMEZONE) {
   const d = new Date(iso);
   const day = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
@@ -52,7 +53,7 @@ export function classifyEmployee(input: {
   tz?: string;
 }): { status: Novelty; lateMin: number; lastPunch: Punch | null } {
   const now = input.now ?? new Date().toISOString();
-  const tz = input.tz ?? "America/Costa_Rica";
+  const tz = input.tz ?? TIMEZONE;
   const today = localParts(now, tz).date;
   const mine = input.punches.filter((p) => {
     if (p.employeeId !== input.employee.id) return false;

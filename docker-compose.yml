@@ -4,12 +4,13 @@ services:
     ports:
       - "47321:47321"
     environment:
-      DEMO_API_KEY: ${DEMO_API_KEY:-demo-rfp-bio-2026}
-      NEXT_PUBLIC_DEMO_API_KEY: ${NEXT_PUBLIC_DEMO_API_KEY:-demo-rfp-bio-2026}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-RelojCR-Admin-2026!}
-      SUPERVISOR_PIN: ${SUPERVISOR_PIN:-2468}
-      TEMPLATE_KEY: ${TEMPLATE_KEY:-}
-      JWT_SECRET: ${JWT_SECRET:-}
+      # Obligatorios: copie .env.example a .env y complételos.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Defina ADMIN_PASSWORD en .env}
+      SUPERVISOR_PIN: ${SUPERVISOR_PIN:?Defina SUPERVISOR_PIN en .env}
+      TEMPLATE_KEY: ${TEMPLATE_KEY:?Defina TEMPLATE_KEY en .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en .env}
+      DEMO_API_KEY: ${DEMO_API_KEY:-}
+      ALLOW_INSECURE_DEFAULTS: ${ALLOW_INSECURE_DEFAULTS:-}
       SANDBOX: ${SANDBOX:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}

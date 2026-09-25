@@ -1,7 +1,8 @@
 import { listAnomalies } from "@/lib/anomalies";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { getDb, listPunches } from "@/lib/db";
-import { listCorrections, reportForDay, todayCR } from "@/lib/db-ops";
+import { listCorrections, reportForDay, todayLocal } from "@/lib/db-ops";
+import { dayBoundsUtc } from "@/lib/config";
 
 export type BriefingBullet = {
   text: string;
@@ -29,8 +30,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
   const report = reportForDay({ day, siteId });
   const punches = listPunches({
     siteId,
-    from: `${day}T00:00:00-06:00`,
-    to: `${day}T23:59:59.999-06:00`,
+    ...dayBoundsUtc(day),
     limit: 500,
   });
   const pins = punches.filter((p) => p.method === "supervisor_pin");
@@ -102,8 +102,7 @@ function factsPayload(day: string, siteId?: string) {
   const report = reportForDay({ day, siteId });
   const punches = listPunches({
     siteId,
-    from: `${day}T00:00:00-06:00`,
-    to: `${day}T23:59:59.999-06:00`,
+    ...dayBoundsUtc(day),
     limit: 200,
   });
   return {
@@ -135,7 +134,7 @@ function factsPayload(day: string, siteId?: string) {
 }
 
 export async function generateBriefing(input: { day?: string; siteId?: string }): Promise<Briefing> {
-  const day = input.day || todayCR();
+  const day = input.day || todayLocal();
   const siteId = input.siteId;
   const fallback = templateBriefing(day, siteId);
   const info = llmInfo();

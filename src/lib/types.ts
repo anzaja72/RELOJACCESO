@@ -68,6 +68,7 @@ export type Terminal = {
   userAgent: string;
   path: string;
   online: boolean;
+  revoked?: boolean;
 };
 
 export type IdentifyResult = {

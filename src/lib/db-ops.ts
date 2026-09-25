@@ -1,8 +1,10 @@
 import { ulid } from "ulidx";
 import { classifyEmployee, type Exception, type Schedule } from "@/lib/attendance-rules";
 import { getDb, listEmployees, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
+import { supervisorPin } from "@/lib/secrets";
 import { hashPassword, verifyPassword, type Role, type SessionUser } from "@/lib/session";
 import type { Employee, Punch } from "@/lib/types";
+import { TIMEZONE, dayBoundsUtc, localNoon } from "@/lib/config";
 
 export type UserRow = {
   id: string;
@@ -141,7 +143,7 @@ export function verifyEmployeePin(employeeId: string, pin: string) {
 
 export function verifySupervisorPin(pin: string) {
   const hash = getSetting("supervisor_pin");
-  if (!hash) return pin === (process.env.SUPERVISOR_PIN || "2468");
+  if (!hash) return pin === supervisorPin();
   return verifyPassword(pin, hash);
 }
 
@@ -362,8 +364,8 @@ function mapSchedule(row: Record<string, unknown>): Schedule {
   };
 }
 
-export function todayCR() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Costa_Rica" }).format(new Date());
+export function todayLocal() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date());
 }
 
 export function reportForDay(input: {
@@ -375,9 +377,8 @@ export function reportForDay(input: {
   zoneId?: string;
   scope?: Scope;
 }) {
-  const day = input.day || todayCR();
-  const from = `${day}T00:00:00-06:00`;
-  const to = `${day}T23:59:59.999-06:00`;
+  const day = input.day || todayLocal();
+  const { from, to } = dayBoundsUtc(day);
   const sites = listSites();
   const siteById = new Map(sites.map((s) => [s.id, s]));
   let employees = (input.scope ? listEmployeesScoped(input.scope) : listEmployees(input.siteId)).filter(
@@ -397,7 +398,7 @@ export function reportForDay(input: {
   });
   const schedules = listSchedules() as Array<Record<string, unknown>>;
   const exceptions = listExceptions() as Array<Record<string, unknown>>;
-  const weekday = new Date(`${day}T12:00:00-06:00`).getDay();
+  const weekday = new Date(localNoon(day)).getDay();
   const rows = employees.map((employee) => {
     const schedRow = schedules.find(
       (s) => String(s.employee_id) === employee.id && Number(s.weekday) === weekday,
@@ -412,7 +413,7 @@ export function reportForDay(input: {
       exception: exRow
         ? ({ date: String(exRow.date), type: String(exRow.type) } as Exception)
         : null,
-      now: `${day}T12:00:00-06:00`,
+      now: localNoon(day),
     });
     return {
       day,

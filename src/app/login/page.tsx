@@ -12,8 +12,8 @@ import type { SessionUser } from "@/lib/session";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@reloj.cr");
-  const [password, setPassword] = useState("RelojCR-Admin-2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,7 +28,8 @@ export default function LoginPage() {
         totp: totp || undefined,
       });
       setSession(res.token, res.user as SessionUser);
-      router.push("/admin");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/admin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo entrar");
     } finally {
@@ -41,9 +42,8 @@ export default function LoginPage() {
       <div className="detail" style={{ maxWidth: 420 }}>
         <h2>Entrar a operación</h2>
         <p>
-          Usuarios semilla (contraseña <code>RelojCR-Admin-2026!</code>):
-          admin, zona, sede, operador y auditor @reloj.cr. También vale la clave
-          API <code>demo-rfp-bio-2026</code> en integraciones.
+          Usuarios semilla: admin, zona, sede, operador y auditor @reloj.cr, con
+          la contraseña definida en <code>ADMIN_PASSWORD</code>.
         </p>
         <div className="form" style={{ marginTop: 16 }}>
           <Label htmlFor="email">Correo</Label>
