@@ -16,6 +16,8 @@ import { KioskActivation } from "./kiosk-activation";
 import type { PunchType, Site, SyncItem } from "@/lib/types";
 import { LOCALE, TIMEZONE } from "@/lib/config";
 
+const SITES_KEY = "reloj-cr-sites";
+
 type ResultState = {
   tone: "ok" | "bad" | "warn";
   title: string;
@@ -96,6 +98,11 @@ export function KioskClient() {
     void api
       .sites()
       .then(({ sites: rows }) => {
+        try {
+          window.localStorage.setItem(SITES_KEY, JSON.stringify(rows));
+        } catch {
+          /* sin espacio: sigue funcionando */
+        }
         setSites(rows);
         const wanted = querySite?.toUpperCase();
         // Una terminal activada queda atada a su sede.
@@ -106,6 +113,17 @@ export function KioskClient() {
         setLoadError(null);
       })
       .catch((err: unknown) => {
+        // Sin red: una terminal activada sigue en su sede con la lista guardada.
+        if (binding) {
+          setSiteId(binding.siteId);
+          try {
+            const saved = window.localStorage.getItem(SITES_KEY);
+            if (saved) setSites(JSON.parse(saved) as Site[]);
+          } catch {
+            /* lista corrupta: se ignora */
+          }
+          return;
+        }
         setLoadError(
           err instanceof Error ? err.message : "No se pudieron cargar las sedes",
         );

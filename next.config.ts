@@ -20,6 +20,18 @@ function devOrigins() {
 const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
   allowedDevOrigins: devOrigins(),
+  async headers() {
+    // El navegador debe revisar sw.js en cada carga para que las actualizaciones lleguen.
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

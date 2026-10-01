@@ -11,6 +11,7 @@ const sans = Inter({
 export const metadata: Metadata = {
   title: `${APP.name} · ${APP.rfp}`,
   description: APP.tagline,
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
