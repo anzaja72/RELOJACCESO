@@ -2,7 +2,6 @@ import { readActor, requireAdmin } from "@/lib/auth";
 import {
   addTemplates,
   getEmployee,
-  listTemplates,
   setEmployeeConsent,
   wipeTemplates,
 } from "@/lib/db";
@@ -11,14 +10,17 @@ import { badRequest, json, parseJson, serverError } from "@/lib/http";
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  // Antes no pedía sesión y devolvía los descriptores faciales de cualquier empleado.
+  // Los descriptores solo viajan hacia el kiosco por /api/templates; aquí basta el resumen.
+  const denied = requireAdmin(request);
+  if (denied) return denied;
   const { id } = await context.params;
   const employee = getEmployee(id);
   if (!employee) return json({ error: "No encontrado" }, 404);
-  const templates = listTemplates().filter((t) => t.employeeId === employee.id);
-  return json({ employee, templates });
+  return json({ employee });
 }
 
 export async function POST(
