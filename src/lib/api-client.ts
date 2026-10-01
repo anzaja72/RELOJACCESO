@@ -193,6 +193,15 @@ export const api = {
   me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
   reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
   settings: () => request<Record<string, unknown>>("/api/v1/settings", { admin: true }),
+  integrity: () =>
+    request<{
+      ok: boolean;
+      chainSince: string | null;
+      chain: { ok: boolean; checked: number; brokenAt: string | null; reason: string | null };
+      punches: { checked: number; uncovered: number; mismatches: Array<{ id: string; problem: string; detail: string }> };
+    }>("/api/v1/integrity", { admin: true }),
+  brand: () =>
+    request<{ brand: { name: string; primary: string; dark: string; light: string } | null }>("/api/v1/brand"),
   saveSettings: (body: Record<string, string>) =>
     request<{ ok: boolean }>("/api/v1/settings", {
       method: "PATCH",
@@ -273,6 +282,26 @@ export const api = {
       terminals: Terminal[];
     }>("/api/health", { admin: true }),
 };
+
+/** Descarga el expediente PDF de un trabajador (la ruta exige el token en la cabecera). */
+export async function downloadDossier(employeeId: string, from: string, to: string) {
+  const res = await fetch(
+    `/api/v1/employees/${encodeURIComponent(employeeId)}/dossier?from=${from}&to=${to}`,
+    { headers: { Authorization: `Bearer ${getToken() ?? ""}` }, cache: "no-store" },
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Error ${res.status}`);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "expediente.pdf";
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+  return { name, sha256: res.headers.get("x-document-sha256") };
+}
 
 export async function fetchAttendance(site?: string): Promise<{
   punches: Punch[];

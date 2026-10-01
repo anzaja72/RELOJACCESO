@@ -152,31 +152,52 @@ export function toXlsx(sheet: string, rows: Record<string, unknown>[]): Uint8Arr
   ]);
 }
 
-export function toSimplePdf(title: string, lines: string[]): Uint8Array {
-  const text = [title, "", ...lines].map((l, i) => `BT /F1 10 Tf 40 ${780 - i * 14} Td (${l.replaceAll("(", "\\(").replaceAll(")", "\\)")}) Tj ET`);
-  const stream = text.join("\n");
+export function toSimplePdf(
+  title: string,
+  lines: string[],
+  opts: { font?: "Helvetica" | "Courier"; size?: number; lineHeight?: number } = {},
+): Uint8Array {
+  const font = opts.font ?? "Helvetica";
+  const size = opts.size ?? 10;
+  const lineHeight = opts.lineHeight ?? 14;
+  const perPage = Math.floor((792 - 80) / lineHeight);
+  const all = [title, "", ...lines];
+  const pages: string[][] = [];
+  for (let i = 0; i < all.length; i += perPage) pages.push(all.slice(i, i + perPage));
+  // Fuente WinAnsi: se escribe en latin1 (tildes y ñ), lo demás se degrada a "?".
+  const esc = (l: string) =>
+    l.replace(/[\\()]/g, (c) => `\\${c}`).replace(/[^\x20-\x7e\xa0-\xff]/g, "?");
   const objects = [
     "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
-    `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj`,
-    `4 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`,
-    "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
+    `2 0 obj << /Type /Pages /Kids [${pages.map((_, i) => `${6 + i * 2} 0 R`).join(" ")}] /Count ${pages.length} >> endobj`,
+    "3 0 obj << /Type /Font /Subtype /Type1 /BaseFont /" + font + " /Encoding /WinAnsiEncoding >> endobj",
+    "4 0 obj << >> endobj",
+    "5 0 obj << >> endobj",
   ];
-  let offset = 9;
-  const offsets = [0];
+  pages.forEach((chunk, i) => {
+    const stream = chunk
+      .map((l, row) => `BT /F1 ${size} Tf 40 ${760 - row * lineHeight} Td (${esc(l)}) Tj ET`)
+      .join("\n");
+    const pageNum = 6 + i * 2;
+    objects.push(
+      `${pageNum} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${pageNum + 1} 0 R /Resources << /Font << /F1 3 0 R >> >> >> endobj`,
+      `${pageNum + 1} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`,
+    );
+  });
   const chunks = ["%PDF-1.4\n"];
+  const offsets = [0];
+  let offset = chunks[0].length;
   for (const obj of objects) {
     offsets.push(offset);
     chunks.push(`${obj}\n`);
     offset += obj.length + 1;
   }
-  const xrefPos = offset;
   chunks.push(`xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`);
   for (let i = 1; i < offsets.length; i += 1) {
     chunks.push(`${String(offsets[i]).padStart(10, "0")} 00000 n \n`);
   }
   chunks.push(
-    `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF`,
+    `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${offset}\n%%EOF`,
   );
-  return new TextEncoder().encode(chunks.join(""));
+  return new Uint8Array(Buffer.from(chunks.join(""), "latin1"));
 }

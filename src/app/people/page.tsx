@@ -6,7 +6,8 @@ import { SitePicker } from "@/components/site-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/lib/api-client";
+import { api, downloadDossier } from "@/lib/api-client";
+import { localDay } from "@/lib/config";
 import type { Employee, Site } from "@/lib/types";
 
 export default function PeoplePage() {
@@ -22,6 +23,8 @@ export default function PeoplePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [dossierTo, setDossierTo] = useState(() => localDay());
+  const [dossierFrom, setDossierFrom] = useState(() => localDay(new Date(Date.now() - 29 * 86_400_000)));
 
   async function reload(site?: string) {
     const [sitesRes, people] = await Promise.all([api.sites(), api.people(true)]);
@@ -92,6 +95,17 @@ export default function PeoplePage() {
     await api.patchEmployee(selected.id, { active });
     await reload(siteId);
     setStatus(active ? "Reactivado." : "Desactivado.");
+  }
+
+  async function exportDossier() {
+    if (!selected) return;
+    try {
+      const { sha256 } = await downloadDossier(selected.id, dossierFrom, dossierTo);
+      setStatus(`Expediente descargado. Huella SHA-256: ${sha256 ?? "n/d"}`);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo generar el expediente");
+    }
   }
 
   async function softDelete() {
@@ -186,6 +200,29 @@ export default function PeoplePage() {
             </div>
             {status && <p className="ok-text">{status}</p>}
           </div>
+          {selected && (
+            <div className="form" style={{ marginTop: 24 }}>
+              <h2 style={{ fontSize: 14 }}>Expediente de cumplimiento (PDF)</h2>
+              <p className="muted">
+                Horas, marcaciones, correcciones aprobadas, alertas de jornada y estado de integridad del registro.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label>Desde</Label>
+                  <Input type="date" value={dossierFrom} onChange={(e) => setDossierFrom(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Hasta</Label>
+                  <Input type="date" value={dossierTo} onChange={(e) => setDossierTo(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <Button variant="outline" className="shade" onClick={() => void exportDossier()}>
+                  Descargar expediente
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>

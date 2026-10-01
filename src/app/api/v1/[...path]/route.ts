@@ -24,6 +24,7 @@ import {
   findUserByEmail,
   getSetting,
   incrementalsPunches,
+  integrityReport,
   insertAlert,
   insertCorrection,
   insertException,
@@ -43,7 +44,9 @@ import {
   retentionDays,
   setSetting,
   setSupervisorPin,
+  siteIdsForScope,
   toSession,
+  todayLocal,
   upsertSchedule,
   verifySupervisorPin,
   ackAlert,
@@ -65,8 +68,11 @@ import {
   upsertPunch,
 } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
+import { isHex, parseBrand } from "@/lib/brand";
+import { buildDossier } from "@/lib/dossier";
 import { toCsv, toSimplePdf, toXlsx, zipStore } from "@/lib/pack";
 import {
+  canApprove,
   newTotpSecret,
   signTerminalToken,
   signToken,
@@ -126,6 +132,17 @@ async function handleGet(request: Request, parts: string[]) {
     });
   }
 
+  // Pública: la pantalla de login y los kioscos necesitan los colores antes de autenticarse.
+  if (route === "brand") {
+    const brand = parseBrand({
+      name: getSetting("brand_name"),
+      primary: getSetting("brand_primary"),
+      dark: getSetting("brand_dark"),
+      light: getSetting("brand_light"),
+    });
+    return json({ brand }, 200, request);
+  }
+
   if (route === "catalog") {
     return json(
       {
@@ -171,6 +188,49 @@ async function handleGet(request: Request, parts: string[]) {
       (e) => !site || e.siteId === site || listSites().find((s) => s.id === e.siteId)?.code === site,
     );
     return json({ employees }, 200, request);
+  }
+
+  // Expediente PDF: datos laborales sensibles, solo gerentes y auditor, y solo de su alcance.
+  if (parts[0] === "employees" && parts[2] === "dossier" && parts.length === 3) {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    if (!canApprove(actor.role) && actor.role !== "auditor") {
+      return json({ error: "Se requiere gerente de sede, auditor o superior", code: "FORBIDDEN" }, 403, request);
+    }
+    const employee = getEmployee(parts[1]);
+    const allowed = siteIdsForScope(scopeOf(actor));
+    if (!employee || (allowed && !allowed.includes(employee.siteId))) {
+      return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
+    }
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const to = url.searchParams.get("to") || todayLocal();
+    const from = url.searchParams.get("from") || new Date(Date.parse(`${to}T12:00:00Z`) - 29 * 86_400_000).toISOString().slice(0, 10);
+    if (!day.test(from) || !day.test(to) || from > to) {
+      return badRequest("from y to deben ser fechas AAAA-MM-DD con from <= to", { code: "VALIDATION" }, request);
+    }
+    if (Date.parse(to) - Date.parse(from) > 366 * 86_400_000) {
+      return badRequest("El periodo máximo es de un año", { code: "VALIDATION" }, request);
+    }
+    const doc = buildDossier({ employeeId: employee.id, from, to, generatedBy: actor.email });
+    if (!doc) return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
+    recordEvent(getDb(), "dossier.generated", { employeeId: employee.id, from, to, by: actor.email, sha256: doc.sha256 });
+    return new Response(Buffer.from(toSimplePdf(doc.title, doc.lines, { font: "Courier", size: 8, lineHeight: 11 })), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${doc.filename}"`,
+        "X-Document-Sha256": doc.sha256,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (route === "integrity") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    if (!canApprove(actor.role) && actor.role !== "auditor") {
+      return json({ error: "Se requiere gerente de sede, auditor o superior", code: "FORBIDDEN" }, 403, request);
+    }
+    return json(integrityReport(), 200, request);
   }
 
   if (route.startsWith("employees/") && parts.length === 2) {
@@ -735,7 +795,22 @@ async function handlePatch(request: Request, parts: string[]) {
       "alert_late",
       "alert_terminal_offline",
       "alert_sync_failed",
+      "labor_max_daily_hours",
+      "labor_max_weekly_hours",
     ];
+    // La marca es global: solo el superadmin la cambia. Vacío = versión básica.
+    const brandKeys = ["brand_name", "brand_primary", "brand_dark", "brand_light"];
+    if (brandKeys.some((k) => k in body)) {
+      if (actor.role !== "superadmin") {
+        return json({ error: "Solo el superadmin cambia la marca", code: "FORBIDDEN" }, 403, request);
+      }
+      const colors = brandKeys.slice(1).map((k) => body[k] ?? "");
+      const clearing = colors.every((c) => c === "");
+      if (!clearing && !colors.every(isHex)) {
+        return badRequest("Los colores deben ser hexadecimales de 6 dígitos, p. ej. #D62300", { code: "VALIDATION" }, request);
+      }
+      for (const k of brandKeys) setSetting(k, k === "brand_name" ? (body[k] ?? "").trim().slice(0, 60) : (body[k] ?? "").toUpperCase());
+    }
     for (const [key, value] of Object.entries(body)) {
       if (key === "supervisor_pin") {
         setSupervisorPin(value);

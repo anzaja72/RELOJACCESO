@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { BrandSettings } from "@/components/brand-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -98,6 +99,7 @@ export default function SettingsPage() {
             </div>
             {status && <p className="ok-text">{status}</p>}
           </div>
+          <BrandSettings />
           <h2 style={{ marginTop: 28, fontSize: 14 }}>Usuarios RBAC</h2>
           {users.map((user) => (
             <div key={user.id} className="row" style={{ padding: "10px 0" }}>

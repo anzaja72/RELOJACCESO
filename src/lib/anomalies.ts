@@ -1,6 +1,7 @@
 import { ulid } from "ulidx";
-import { getDb, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
-import { reportForDay, todayLocal } from "@/lib/db-ops";
+import { getDb, listEmployees, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
+import { laborRules, reportForDay, todayLocal } from "@/lib/db-ops";
+import { analyzeLabor } from "@/lib/labor";
 import { TIMEZONE, dayBoundsUtc, localNoon } from "@/lib/config";
 
 export type AnomalyRow = {
@@ -192,6 +193,33 @@ export function scanAnomalies(day?: string) {
           offline: terminals.filter((t) => !t.online).map((t) => t.id),
           peak,
         },
+      });
+      (r.created ? created : updated).push(r.row);
+    }
+
+    // Límites de jornada: se mira desde dos semanas atrás para tener semanas completas y rachas.
+    const windowStart = dayBoundsUtc(shiftDay(d, -13)).from;
+    const recentFrom = shiftDay(d, -6);
+    const history = listPunches({ siteId: site.id, from: windowStart, to, order: "asc", limit: 5000 });
+    const rules = laborRules();
+    const over: Array<{ employeeId: string; name: string; findings: string[] }> = [];
+    for (const emp of listEmployees(site.id)) {
+      const mine = history.filter(
+        (p) => p.employeeId === emp.id && (p.decision === "matched" || p.decision === "queued"),
+      );
+      if (!mine.length) continue;
+      const findings = analyzeLabor(mine, TIMEZONE, rules).findings.filter((f) => f.date >= recentFrom);
+      if (findings.length) over.push({ employeeId: emp.id, name: emp.name, findings: findings.map((f) => f.message) });
+    }
+    if (over.length) {
+      const names = over.slice(0, 3).map((o) => o.name).join(", ");
+      const r = upsertAnomaly({
+        kind: "labor_limits",
+        siteId: site.id,
+        day: d,
+        message: `${over.length} trabajador(es) superan límites de jornada en ${site.name}: ${names}${over.length > 3 ? "…" : ""}. Revisar el expediente antes de decidir nada.`,
+        punchIds: [],
+        evidence: { rules, workers: over },
       });
       (r.created ? created : updated).push(r.row);
     }

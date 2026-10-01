@@ -2,6 +2,8 @@ import { ulid } from "ulidx";
 import { classifyEmployee, type Exception, type Schedule } from "@/lib/attendance-rules";
 import { getDb, listEmployees, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
 import { supervisorPin } from "@/lib/secrets";
+import { verifyChain, type ChainRow } from "@/lib/integrity";
+import { DEFAULT_RULES, type LaborRules } from "@/lib/labor";
 import { hashPassword, verifyPassword, type Role, type SessionUser } from "@/lib/session";
 import type { Employee, Punch } from "@/lib/types";
 import { TIMEZONE, dayBoundsUtc, localNoon } from "@/lib/config";
@@ -231,6 +233,8 @@ export function insertCorrection(input: {
     punchId: input.punchId,
     reason: input.reason,
     approvedBy: input.approvedBy,
+    previous,
+    next,
   });
   return db.prepare("SELECT * FROM corrections WHERE id = ?").get(id);
 }
@@ -496,5 +500,89 @@ export function dumpMasters() {
     punches: listPunches({ limit: 5000 }),
     terminals: listTerminals(),
     anomalies: getDb().prepare("SELECT * FROM anomalies ORDER BY created_at DESC LIMIT 500").all(),
+  };
+}
+
+/** Límites de jornada: configurables en settings, con los valores por defecto de labor.ts. */
+export function laborRules(): LaborRules {
+  const num = (key: string, fallback: number) => {
+    const n = Number(getSetting(key));
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  return {
+    maxDailyHours: num("labor_max_daily_hours", DEFAULT_RULES.maxDailyHours),
+    maxWeeklyHours: num("labor_max_weekly_hours", DEFAULT_RULES.maxWeeklyHours),
+    restEveryDays: DEFAULT_RULES.restEveryDays,
+  };
+}
+
+type Expected = { employeeId: string | null; type: string; capturedAt: string; terminalId: string };
+export type PunchMismatch = { id: string; problem: "modified" | "missing"; detail: string };
+
+/**
+ * ¿Los registros siguen siendo los que se sellaron? Verifica la cadena de hashes
+ * de los eventos y coteja cada marca contra lo que dijo su evento (más las
+ * correcciones aprobadas), de modo que un UPDATE o DELETE directo a la base se note.
+ */
+export function integrityReport() {
+  const db = getDb();
+  const events = db
+    .prepare("SELECT id, type, payload, created_at, prev_hash, hash FROM events ORDER BY rowid")
+    .all() as ChainRow[];
+  const chain = verifyChain(events);
+
+  const expected = new Map<string, Expected>();
+  for (const e of events) {
+    if (e.type !== "punch.created" && e.type !== "punch.corrected") continue;
+    const p = JSON.parse(e.payload) as Record<string, unknown> & {
+      previous?: unknown;
+      next?: { ts: string; type: string };
+    };
+    if (e.type === "punch.created" && typeof p.capturedAt === "string") {
+      expected.set(String(p.id), {
+        employeeId: (p.employeeId as string | null) ?? null,
+        type: String(p.type),
+        capturedAt: p.capturedAt,
+        terminalId: String(p.terminalId),
+      });
+    } else if (e.type === "punch.corrected" && p.next) {
+      const cur = expected.get(String(p.punchId));
+      if (cur) expected.set(String(p.punchId), { ...cur, capturedAt: p.next.ts, type: p.next.type });
+    }
+  }
+
+  const rows = db
+    .prepare("SELECT id, employee_id, type, captured_at, terminal_id FROM punches")
+    .all() as Array<{ id: string; employee_id: string | null; type: string; captured_at: string; terminal_id: string }>;
+  const mismatches: PunchMismatch[] = [];
+  const seen = new Set<string>();
+  let uncovered = 0;
+  for (const r of rows) {
+    seen.add(r.id);
+    const exp = expected.get(r.id);
+    if (!exp) {
+      uncovered += 1;
+      continue;
+    }
+    const diffs: string[] = [];
+    if (r.employee_id !== exp.employeeId) diffs.push("colaborador");
+    if (r.type !== exp.type) diffs.push("tipo");
+    if (r.captured_at !== exp.capturedAt) diffs.push("fecha/hora");
+    if (r.terminal_id !== exp.terminalId) diffs.push("terminal");
+    if (diffs.length) mismatches.push({ id: r.id, problem: "modified", detail: `Difiere: ${diffs.join(", ")}` });
+  }
+  // La retención borra marcas viejas a propósito: solo cuenta como faltante lo posterior al corte.
+  const cutoff = new Date(Date.now() - retentionDays() * 86_400_000).toISOString();
+  for (const [id, exp] of expected) {
+    if (!seen.has(id) && exp.capturedAt >= cutoff) {
+      mismatches.push({ id, problem: "missing", detail: "La marca existe en el registro sellado pero ya no está en la base" });
+    }
+  }
+  return {
+    chain,
+    chainSince: getSetting("integrity_chain_since"),
+    head: events.length ? events[events.length - 1].hash : null,
+    punches: { checked: rows.length - uncovered, uncovered, mismatches },
+    ok: chain.ok && mismatches.length === 0,
   };
 }

@@ -18,6 +18,7 @@ import type {
 
 import { openJson, sealJson } from "@/lib/crypto-box";
 import { adminPassword, supervisorPin } from "@/lib/secrets";
+import { GENESIS_HASH, chainHash } from "@/lib/integrity";
 import { hashPassword } from "@/lib/session";
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
@@ -401,7 +402,39 @@ function migrateV3(db: Database.Database) {
     db.exec("ALTER TABLE terminals ADD COLUMN activated_by TEXT");
     db.exec("ALTER TABLE terminals ADD COLUMN revoked_at TEXT");
   }
+  // Cadena de hashes sobre los eventos (ver src/lib/integrity.ts).
+  if (!hasColumn(db, "events", "hash")) {
+    db.exec("ALTER TABLE events ADD COLUMN prev_hash TEXT");
+    db.exec("ALTER TABLE events ADD COLUMN hash TEXT");
+  }
+  sealEvents(db);
   globalForDb.__bioV3 = true;
+}
+
+/**
+ * Sella los eventos que aún no tienen hash (los previos a esta función quedan
+ * sellados desde la fecha de migración: no se puede probar nada anterior a ella).
+ */
+function sealEvents(db: Database.Database) {
+  const pending = db
+    .prepare("SELECT rowid AS rid, id, type, payload, created_at FROM events WHERE hash IS NULL ORDER BY rowid")
+    .all() as Array<{ rid: number; id: string; type: string; payload: string; created_at: string }>;
+  db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('integrity_chain_since', ?)").run(
+    new Date().toISOString(),
+  );
+  if (!pending.length) return;
+  const last = db
+    .prepare("SELECT hash FROM events WHERE hash IS NOT NULL ORDER BY rowid DESC LIMIT 1")
+    .get() as { hash: string } | undefined;
+  let prev = last?.hash ?? GENESIS_HASH;
+  const update = db.prepare("UPDATE events SET prev_hash = ?, hash = ? WHERE rowid = ?");
+  db.transaction(() => {
+    for (const e of pending) {
+      const hash = chainHash(prev, e);
+      update.run(prev, hash, e.rid);
+      prev = hash;
+    }
+  })();
 }
 
 export function recordEvent(
@@ -409,9 +442,16 @@ export function recordEvent(
   type: string,
   payload: unknown,
 ) {
+  const id = ulid();
+  const body = JSON.stringify(payload);
+  const createdAt = new Date().toISOString();
+  const last = db.prepare("SELECT hash FROM events ORDER BY rowid DESC LIMIT 1").get() as
+    | { hash: string | null }
+    | undefined;
+  const prev = last?.hash ?? GENESIS_HASH;
   db.prepare(
-    "INSERT INTO events (id, type, payload, created_at) VALUES (?, ?, ?, ?)",
-  ).run(ulid(), type, JSON.stringify(payload), new Date().toISOString());
+    "INSERT INTO events (id, type, payload, created_at, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(id, type, body, createdAt, prev, chainHash(prev, { id, type, payload: body, created_at: createdAt }));
   dispatchWebhook(type, payload);
 }
 
@@ -734,9 +774,14 @@ export function upsertPunch(input: SyncItem & { offline?: boolean }): {
       input.reason ?? null,
       null,
     );
+  // Los campos de la marca van en el evento sellado para poder cotejarla luego (integrityReport).
   recordEvent(getDb(), "punch.created", {
     id: input.id,
     siteId: site.id,
+    employeeId: input.employeeId,
+    type: input.type,
+    capturedAt: input.capturedAt,
+    terminalId: input.terminalId,
     decision: input.decision,
     offline: Boolean(input.offline),
     method: input.method ?? "face",

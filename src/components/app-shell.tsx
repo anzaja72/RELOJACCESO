@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getSessionUser, getToken } from "@/lib/client-session";
+import { useBrandName } from "@/components/brand-theme";
 import { APP } from "@/lib/config";
 
 const links = [
@@ -52,6 +53,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const brandName = useBrandName();
   const [user, setUser] = useState<ReturnType<typeof getSessionUser>>(null);
   const [allowed, setAllowed] = useState(isPublic(pathname));
 
@@ -73,7 +75,7 @@ export function AppShell({
           <span className="rail-avatar">RC</span>
           <div>
             <strong>{APP.name}</strong>
-            <small>{APP.rfp}</small>
+            <small>{brandName || APP.rfp}</small>
           </div>
         </div>
         <nav className="rail-nav">

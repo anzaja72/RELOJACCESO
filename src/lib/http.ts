@@ -27,10 +27,12 @@ export function parseJson<T>(request: Request): Promise<T> {
 const hits = new Map<string, number[]>();
 
 export function rateLimit(request: Request, limit = 80, windowMs = 60_000) {
-  const key =
+  // Contador por IP *y ruta*: las marcaciones de un kiosco no deben gastar el cupo de login.
+  const key = `${new URL(request.url).pathname}|${
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-real-ip") ||
-    "local";
+    "local"
+  }`;
   const now = Date.now();
   const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
   recent.push(now);

@@ -16,6 +16,7 @@ export default function AuditPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [selected, setSelected] = useState<EventRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [integrity, setIntegrity] = useState<Awaited<ReturnType<typeof api.integrity>> | null>(null);
 
   useEffect(() => {
     void api
@@ -27,11 +28,25 @@ export default function AuditPage() {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "No se pudo cargar");
       });
+    // Solo gerentes y auditor lo ven; para otros roles simplemente no se muestra.
+    void api.integrity().then(setIntegrity).catch(() => undefined);
   }, []);
 
   return (
     <AppShell title="Auditoría" meta="Accesos, cambios, exportaciones, enrolamiento y correcciones">
       {error && <p className="err-text" style={{ padding: 16 }}>{error}</p>}
+      {integrity && (
+        <p
+          className={integrity.ok ? "ok-text" : "err-text"}
+          style={{ padding: "12px 22px", borderBottom: "1px solid var(--border-soft)" }}
+        >
+          {integrity.ok
+            ? `Registro íntegro: ${integrity.chain.checked} eventos sellados y ${integrity.punches.checked} marcaciones cotejadas`
+            : `Registro alterado: ${integrity.chain.reason ?? ""} ${integrity.punches.mismatches.length ? `· ${integrity.punches.mismatches.length} marcación(es) no coinciden con el registro sellado` : ""}`}
+          {integrity.chainSince ? ` · sellado desde ${new Date(integrity.chainSince).toLocaleDateString(LOCALE)}` : ""}
+          {integrity.punches.uncovered ? ` · ${integrity.punches.uncovered} marcaciones previas al sellado sin cotejo` : ""}
+        </p>
+      )}
       <div className="split">
         <div className="split-list">
           {events.map((event) => (
