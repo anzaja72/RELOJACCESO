@@ -1,4 +1,5 @@
-import { requireAdmin } from "@/lib/auth";
+import { isResponse } from "@/lib/auth";
+import { filterBySite, requireReader } from "@/lib/scope";
 import { listPunches } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -10,15 +11,15 @@ function csvEscape(value: unknown) {
 }
 
 export function GET(request: Request) {
-  const denied = requireAdmin(request);
-  if (denied) return denied;
+  const actor = requireReader(request);
+  if (isResponse(actor)) return actor;
   const url = new URL(request.url);
-  const punches = listPunches({
+  const punches = filterBySite(actor, listPunches({
     siteId: url.searchParams.get("site") ?? undefined,
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
     limit: 500,
-  });
+  }), (p) => p.siteId);
   const header = [
     "id",
     "sede",

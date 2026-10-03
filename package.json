@@ -11,6 +11,7 @@
     "predev": "node scripts/ensure-models.mjs",
     "test": "node scripts/match.test.mjs && node scripts/queue.test.mjs && node scripts/attendance.test.mjs && node scripts/labor.test.mjs",
     "smoke": "node scripts/rfp-smoke.mjs && node scripts/ai-smoke.mjs",
+    "smoke:roles": "node scripts/roles-smoke.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs"
   },

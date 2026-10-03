@@ -125,6 +125,16 @@
   box-shadow: none;
 }
 .rail-link.active:hover { background: color-mix(in srgb, var(--primary) 88%, #000); color: var(--primary-foreground); }
+.rail-scope {
+  margin: 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--card);
+}
+.rail-scope strong { display: block; font-size: 12.5px; font-weight: 600; }
+.rail-scope span { display: block; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
 .rail-foot {
   margin-top: auto;
   padding: 0 10px;

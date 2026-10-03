@@ -80,7 +80,16 @@ function upsertAnomaly(input: {
         existing.id,
       );
     }
-    return { row: mapAnomaly({ ...existing, ...input, punch_ids: JSON.stringify(input.punchIds) }), created: false };
+    return {
+      row: mapAnomaly({
+        ...existing,
+        ...input,
+        // mapAnomaly espera texto JSON, no los objetos que llegan en `input`.
+        punch_ids: JSON.stringify(input.punchIds),
+        evidence: JSON.stringify(input.evidence),
+      }),
+      created: false,
+    };
   }
   const id = ulid();
   db.prepare(

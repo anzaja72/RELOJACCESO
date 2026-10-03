@@ -3,6 +3,7 @@ import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { eventTypes } from "@/lib/db-ops";
 import { listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
+import { filterBySite } from "@/lib/scope";
 import type { SyncItem } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -11,14 +12,18 @@ export function GET(request: Request) {
   const actor = requireActor(request);
   if (actor instanceof Response) return actor;
   const url = new URL(request.url);
-  const punches = listPunches({
-    siteId: url.searchParams.get("site") ?? undefined,
-    from: url.searchParams.get("from") ?? undefined,
-    to: url.searchParams.get("to") ?? undefined,
-    limit: url.searchParams.get("limit")
-      ? Number(url.searchParams.get("limit"))
-      : 200,
-  });
+  const punches = filterBySite(
+    actor,
+    listPunches({
+      siteId: url.searchParams.get("site") ?? undefined,
+      from: url.searchParams.get("from") ?? undefined,
+      to: url.searchParams.get("to") ?? undefined,
+      limit: url.searchParams.get("limit")
+        ? Number(url.searchParams.get("limit"))
+        : 200,
+    }),
+    (p) => p.siteId,
+  );
   return json({ punches });
 }
 

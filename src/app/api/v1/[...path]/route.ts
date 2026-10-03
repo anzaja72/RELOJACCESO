@@ -70,6 +70,7 @@ import {
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import { isHex, isLogo, parseBrand } from "@/lib/brand";
 import { buildDossier } from "@/lib/dossier";
+import { allowedSiteIds, filterBySite, requireEmployeeAccess, requireReader, requireSuperadmin, siteInScope } from "@/lib/scope";
 import { toCsv, toSimplePdf, toXlsx, zipStore } from "@/lib/pack";
 import {
   canApprove,
@@ -235,22 +236,20 @@ async function handleGet(request: Request, parts: string[]) {
   }
 
   if (route.startsWith("employees/") && parts.length === 2) {
-    const actor = actorOrThrow(request);
-    if (isResponse(actor)) return actor;
-    const employee = getEmployee(parts[1]);
-    if (!employee) return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
-    return json({ employee }, 200, request);
+    const access = requireEmployeeAccess(request, parts[1], { write: false });
+    if (access instanceof Response) return access;
+    return json({ employee: access.employee }, 200, request);
   }
 
   if (route === "punches/stream") {
-    const denied = requireAdmin(request);
-    if (denied) return denied;
+    const streamActor = actorOrThrow(request);
+    if (isResponse(streamActor)) return streamActor;
     const encoder = new TextEncoder();
     const site = url.searchParams.get("site") ?? undefined;
     const stream = new ReadableStream({
       start(controller) {
         const tick = () => {
-          const punches = listPunches({ siteId: site, limit: 40 });
+          const punches = filterBySite(streamActor, listPunches({ siteId: site, limit: 40 }), (p) => p.siteId);
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ punches, ts: Date.now() })}\n\n`));
         };
         tick();
@@ -300,10 +299,10 @@ async function handleGet(request: Request, parts: string[]) {
   }
 
   if (route === "exports/pack") {
-    const actor = actorOrThrow(request);
+    const actor = requireReader(request);
     if (isResponse(actor)) return actor;
     recordEvent(getDb(), "export.pack", { actor: actor.email, format: url.searchParams.get("format") });
-    const dump = dumpMasters();
+    const dump = dumpMasters(allowedSiteIds(actor));
     const format = url.searchParams.get("format") || "json";
     const punchRows = (dump.punches as Array<Record<string, unknown>>).map((p) => ({
       id: p.id,
@@ -371,26 +370,26 @@ async function handleGet(request: Request, parts: string[]) {
   if (route === "corrections") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
-    return json({ corrections: listCorrections(url.searchParams.get("punch") ?? undefined) }, 200, request);
+    return json({ corrections: listCorrections(url.searchParams.get("punch") ?? undefined, allowedSiteIds(actor)) }, 200, request);
   }
 
   if (route === "schedules") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
-    return json({ schedules: listSchedules(url.searchParams.get("employee") ?? undefined) }, 200, request);
+    return json({ schedules: listSchedules(url.searchParams.get("employee") ?? undefined, allowedSiteIds(actor)) }, 200, request);
   }
 
   if (route === "exceptions") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
-    return json({ exceptions: listExceptions(url.searchParams.get("employee") ?? undefined) }, 200, request);
+    return json({ exceptions: listExceptions(url.searchParams.get("employee") ?? undefined, allowedSiteIds(actor)) }, 200, request);
   }
 
   if (route === "alerts") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
     ensureOfflineAlerts();
-    return json({ alerts: listAlerts() }, 200, request);
+    return json({ alerts: listAlerts(allowedSiteIds(actor)) }, 200, request);
   }
 
   if (route === "settings") {
@@ -414,7 +413,7 @@ async function handleGet(request: Request, parts: string[]) {
   if (route === "enrollment-audit") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
-    return json({ audit: listEnrollmentAudit(url.searchParams.get("employee") ?? undefined) }, 200, request);
+    return json({ audit: listEnrollmentAudit(url.searchParams.get("employee") ?? undefined, allowedSiteIds(actor)) }, 200, request);
   }
 
   if (route === "users") {
@@ -546,6 +545,9 @@ async function handlePost(request: Request, parts: string[]) {
       if (!body.name?.trim() || !body.code?.trim() || !body.siteId) {
         return badRequest("name, code y siteId son obligatorios", { code: "VALIDATION" }, request);
       }
+      if (!siteInScope(actor, body.siteId)) {
+        return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+      }
       const employee = createEmployee({
         name: body.name,
         code: body.code,
@@ -671,6 +673,12 @@ async function handlePost(request: Request, parts: string[]) {
       if (!body.punchId || !body.reason?.trim()) {
         return badRequest("punchId y reason son obligatorios", { code: "VALIDATION" }, request);
       }
+      const punchSite = getDb().prepare("SELECT site_id FROM punches WHERE id = ?").get(body.punchId) as
+        | { site_id: string }
+        | undefined;
+      if (punchSite && !siteInScope(actor, punchSite.site_id)) {
+        return json({ error: "Marcación fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+      }
       const row = insertCorrection({
         punchId: body.punchId,
         reason: body.reason.trim(),
@@ -699,6 +707,10 @@ async function handlePost(request: Request, parts: string[]) {
     if (!body.employeeId || body.weekday == null || !body.startHm || !body.endHm) {
       return badRequest("employeeId, weekday, startHm y endHm son obligatorios", { code: "VALIDATION" }, request);
     }
+    const target = getEmployee(body.employeeId);
+    if (!target || !siteInScope(actor, target.siteId)) {
+      return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
+    }
     const id = upsertSchedule({
       employeeId: body.employeeId,
       weekday: body.weekday,
@@ -721,6 +733,10 @@ async function handlePost(request: Request, parts: string[]) {
     if (!body.employeeId || !body.date || !body.type || !body.reason) {
       return badRequest("employeeId, date, type y reason son obligatorios", { code: "VALIDATION" }, request);
     }
+    const target = getEmployee(body.employeeId);
+    if (!target || !siteInScope(actor, target.siteId)) {
+      return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
+    }
     return json({ exception: insertException({ ...body, createdBy: actor.email } as never) }, 201, request);
   }
 
@@ -738,7 +754,7 @@ async function handlePost(request: Request, parts: string[]) {
   }
 
   if (route === "settings/retention") {
-    const actor = requireApprover(request);
+    const actor = requireSuperadmin(request);
     if (isResponse(actor)) return actor;
     applyRetention();
     return json({ ok: true, retentionDays: retentionDays() }, 200, request);
@@ -750,8 +766,9 @@ async function handlePost(request: Request, parts: string[]) {
 async function handlePatch(request: Request, parts: string[]) {
   const route = joinPath(parts);
   if (parts[0] === "employees" && parts[1]) {
-    const actor = requireWrite(request);
-    if (isResponse(actor)) return actor;
+    const access = requireEmployeeAccess(request, parts[1], { write: true });
+    if (access instanceof Response) return access;
+    const actor = access.actor;
     try {
       const body = await parseJson<{
         active?: boolean;
@@ -763,7 +780,10 @@ async function handlePatch(request: Request, parts: string[]) {
         pin?: string | null;
         role?: string;
       }>(request);
-      const employee = patchEmployee(parts[1], body);
+      if (body.siteId && !siteInScope(actor, body.siteId)) {
+        return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+      }
+      const employee = patchEmployee(access.employee.id, body);
       if (body.revokeConsent) {
         insertEnrollmentAudit({
           employeeId: parts[1],
@@ -786,7 +806,8 @@ async function handlePatch(request: Request, parts: string[]) {
     return json({ ok: true }, 200, request);
   }
   if (route === "settings") {
-    const actor = requireApprover(request);
+    // Los ajustes (retención, PIN de supervisor, marca, límites) son globales: solo el superadmin.
+    const actor = requireSuperadmin(request);
     if (isResponse(actor)) return actor;
     const body = await parseJson<Record<string, string>> (request);
     const allowed = [

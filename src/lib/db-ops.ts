@@ -105,6 +105,8 @@ export function disableTotp(userId: string) {
 
 export type Scope = { role: Role; scopeType: SessionUser["scopeType"]; scopeId: string | null };
 
+const marks = (ids: string[]) => ids.map(() => "?").join(",");
+
 export function siteIdsForScope(scope: Scope): string[] | null {
   if (scope.role === "superadmin" || scope.role === "auditor" || scope.scopeType === "all") {
     return null;
@@ -178,14 +180,19 @@ export function insertEnrollmentAudit(input: {
     );
 }
 
-export function listEnrollmentAudit(employeeId?: string) {
+export function listEnrollmentAudit(employeeId?: string, siteIds?: string[] | null) {
   const db = getDb();
+  if (siteIds && siteIds.length === 0) return [];
+  const scope = siteIds ? ` AND site_id IN (${marks(siteIds)})` : "";
+  const args = siteIds ?? [];
   if (employeeId) {
     return db
-      .prepare("SELECT * FROM enrollment_audit WHERE employee_id = ? ORDER BY created_at DESC")
-      .all(employeeId);
+      .prepare(`SELECT * FROM enrollment_audit WHERE employee_id = ?${scope} ORDER BY created_at DESC`)
+      .all(employeeId, ...args);
   }
-  return db.prepare("SELECT * FROM enrollment_audit ORDER BY created_at DESC LIMIT 200").all();
+  return db
+    .prepare(`SELECT * FROM enrollment_audit WHERE 1=1${scope} ORDER BY created_at DESC LIMIT 200`)
+    .all(...args);
 }
 
 export function insertCorrection(input: {
@@ -239,20 +246,28 @@ export function insertCorrection(input: {
   return db.prepare("SELECT * FROM corrections WHERE id = ?").get(id);
 }
 
-export function listCorrections(punchId?: string) {
+export function listCorrections(punchId?: string, siteIds?: string[] | null) {
   const db = getDb();
+  if (siteIds && siteIds.length === 0) return [];
+  const scope = siteIds ? ` AND p.site_id IN (${marks(siteIds)})` : "";
+  const args = siteIds ?? [];
+  const base = "SELECT c.* FROM corrections c JOIN punches p ON p.id = c.punch_id WHERE 1=1";
   if (punchId) {
-    return db.prepare("SELECT * FROM corrections WHERE punch_id = ? ORDER BY created_at DESC").all(punchId);
+    return db.prepare(`${base} AND c.punch_id = ?${scope} ORDER BY c.created_at DESC`).all(punchId, ...args);
   }
-  return db.prepare("SELECT * FROM corrections ORDER BY created_at DESC LIMIT 200").all();
+  return db.prepare(`${base}${scope} ORDER BY c.created_at DESC LIMIT 200`).all(...args);
 }
 
-export function listSchedules(employeeId?: string) {
+export function listSchedules(employeeId?: string, siteIds?: string[] | null) {
   const db = getDb();
+  if (siteIds && siteIds.length === 0) return [];
+  const scope = siteIds ? ` AND e.site_id IN (${marks(siteIds)})` : "";
+  const args = siteIds ?? [];
+  const base = "SELECT s.* FROM schedules s JOIN employees e ON e.id = s.employee_id WHERE 1=1";
   if (employeeId) {
-    return db.prepare("SELECT * FROM schedules WHERE employee_id = ? ORDER BY weekday").all(employeeId);
+    return db.prepare(`${base} AND s.employee_id = ?${scope} ORDER BY s.weekday`).all(employeeId, ...args);
   }
-  return db.prepare("SELECT * FROM schedules ORDER BY employee_id, weekday").all();
+  return db.prepare(`${base}${scope} ORDER BY s.employee_id, s.weekday`).all(...args);
 }
 
 export function upsertSchedule(input: {
@@ -280,12 +295,16 @@ export function upsertSchedule(input: {
   return id;
 }
 
-export function listExceptions(employeeId?: string) {
+export function listExceptions(employeeId?: string, siteIds?: string[] | null) {
   const db = getDb();
+  if (siteIds && siteIds.length === 0) return [];
+  const scope = siteIds ? ` AND e.site_id IN (${marks(siteIds)})` : "";
+  const args = siteIds ?? [];
+  const base = "SELECT x.* FROM exceptions x JOIN employees e ON e.id = x.employee_id WHERE 1=1";
   if (employeeId) {
-    return db.prepare("SELECT * FROM exceptions WHERE employee_id = ? ORDER BY date DESC").all(employeeId);
+    return db.prepare(`${base} AND x.employee_id = ?${scope} ORDER BY x.date DESC`).all(employeeId, ...args);
   }
-  return db.prepare("SELECT * FROM exceptions ORDER BY date DESC").all();
+  return db.prepare(`${base}${scope} ORDER BY x.date DESC`).all(...args);
 }
 
 export function insertException(input: {
@@ -313,8 +332,12 @@ export function insertException(input: {
   return getDb().prepare("SELECT * FROM exceptions WHERE id = ?").get(id);
 }
 
-export function listAlerts() {
-  return getDb().prepare("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 100").all();
+export function listAlerts(siteIds?: string[] | null) {
+  if (!siteIds) return getDb().prepare("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 100").all();
+  if (siteIds.length === 0) return [];
+  return getDb()
+    .prepare(`SELECT * FROM alerts WHERE site_id IN (${marks(siteIds)}) ORDER BY created_at DESC LIMIT 100`)
+    .all(...siteIds);
 }
 
 export function insertAlert(type: string, message: string, siteId?: string | null, employeeId?: string | null) {
@@ -480,26 +503,35 @@ export function ensureOfflineAlerts() {
   }
 }
 
-export function dumpMasters() {
+export function dumpMasters(siteIds?: string[] | null) {
   const db = getDb();
+  // siteIds = null/undefined: todas las sedes; si no, solo las del alcance del usuario.
+  const only = <T>(rows: T[], site: (row: T) => string | null | undefined) =>
+    siteIds ? rows.filter((r) => siteIds.includes(String(site(r)))) : rows;
   return {
     countries: listCountries(),
     zones: listZones(),
-    sites: listSites(),
-    employees: listEmployees(undefined, { includeDeleted: true }),
-    users: listUsersPublic(),
-    schedules: listSchedules(),
-    exceptions: listExceptions(),
+    sites: only(listSites(), (s) => s.id),
+    employees: only(listEmployees(undefined, { includeDeleted: true }), (e) => e.siteId),
+    users: siteIds ? [] : listUsersPublic(),
+    schedules: listSchedules(undefined, siteIds),
+    exceptions: listExceptions(undefined, siteIds),
     settings: Object.fromEntries(
-      Object.entries(listSettings()).filter(([k]) => k !== "supervisor_pin"),
+      Object.entries(listSettings()).filter(([k]) => k !== "supervisor_pin" && k !== "brand_logo"),
     ),
-    enrollmentAudit: listEnrollmentAudit(),
-    corrections: listCorrections(),
-    alerts: listAlerts(),
-    events: db.prepare("SELECT * FROM events ORDER BY created_at DESC LIMIT 2000").all(),
-    punches: listPunches({ limit: 5000 }),
-    terminals: listTerminals(),
-    anomalies: getDb().prepare("SELECT * FROM anomalies ORDER BY created_at DESC LIMIT 500").all(),
+    enrollmentAudit: listEnrollmentAudit(undefined, siteIds),
+    corrections: listCorrections(undefined, siteIds),
+    alerts: listAlerts(siteIds),
+    events: siteIds ? [] : db.prepare("SELECT * FROM events ORDER BY created_at DESC LIMIT 2000").all(),
+    punches: only(listPunches({ limit: 5000 }), (p) => p.siteId),
+    terminals: only(listTerminals(), (t) => t.siteId),
+    anomalies: siteIds
+      ? siteIds.length
+        ? db
+            .prepare(`SELECT * FROM anomalies WHERE site_id IN (${marks(siteIds)}) ORDER BY created_at DESC LIMIT 500`)
+            .all(...siteIds)
+        : []
+      : db.prepare("SELECT * FROM anomalies ORDER BY created_at DESC LIMIT 500").all(),
   };
 }
 

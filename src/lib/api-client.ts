@@ -57,7 +57,13 @@ function expireSession() {
 }
 
 export const api = {
-  sites: () => request<{ sites: Site[] }>("/api/sites"),
+  sites: () => request<{ sites: Site[] }>("/api/sites", { admin: true }),
+  mySites: () =>
+    request<{
+      sites: Site[];
+      zones: Array<{ id: string; name: string; country_id: string }>;
+      countries: Array<{ id: string; name: string }>;
+    }>("/api/v1/sites", { admin: true }),
   catalog: () =>
     request<{
       sites: Site[];

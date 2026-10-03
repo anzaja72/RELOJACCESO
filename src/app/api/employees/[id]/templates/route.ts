@@ -1,4 +1,4 @@
-import { readActor, requireAdmin } from "@/lib/auth";
+import { requireEmployeeAccess } from "@/lib/scope";
 import {
   addTemplates,
   getEmployee,
@@ -15,24 +15,22 @@ export async function GET(
 ) {
   // Antes no pedía sesión y devolvía los descriptores faciales de cualquier empleado.
   // Los descriptores solo viajan hacia el kiosco por /api/templates; aquí basta el resumen.
-  const denied = requireAdmin(request);
-  if (denied) return denied;
   const { id } = await context.params;
-  const employee = getEmployee(id);
-  if (!employee) return json({ error: "No encontrado" }, 404);
-  return json({ employee });
+  const access = requireEmployeeAccess(request, id, { write: false });
+  if (access instanceof Response) return access;
+  return json({ employee: access.employee });
 }
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const denied = requireAdmin(request);
-  if (denied) return denied;
+  // Capturar biometría exige permiso de escritura (no el auditor) y la sede del empleado.
+  const { id } = await context.params;
+  const access = requireEmployeeAccess(request, id, { write: true });
+  if (access instanceof Response) return access;
+  const { employee, actor } = access;
   try {
-    const { id } = await context.params;
-    const employee = getEmployee(id);
-    if (!employee) return json({ error: "No encontrado" }, 404);
     const body = await parseJson<{
       descriptors?: number[][];
       consentAt?: string;
@@ -44,10 +42,9 @@ export async function POST(
       return badRequest("Se requieren 1–3 descriptores de 128 dimensiones");
     }
     if (body.consentAt) setEmployeeConsent(employee.id, body.consentAt);
-    const actor = readActor(request);
     addTemplates(employee.id, descriptors.slice(0, 3), {
-      operatorId: actor?.id,
-      operatorName: actor?.name ?? actor?.email,
+      operatorId: actor.id,
+      operatorName: actor.name ?? actor.email,
       userAgent: request.headers.get("user-agent"),
       siteId: employee.siteId,
     });
@@ -61,15 +58,13 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const denied = requireAdmin(request);
-  if (denied) return denied;
   const { id } = await context.params;
-  const employee = getEmployee(id);
-  if (!employee) return json({ error: "No encontrado" }, 404);
-  const actor = readActor(request);
+  const access = requireEmployeeAccess(request, id, { write: true });
+  if (access instanceof Response) return access;
+  const { employee, actor } = access;
   wipeTemplates(employee.id, {
-    operatorId: actor?.id,
-    operatorName: actor?.name ?? actor?.email,
+    operatorId: actor.id,
+    operatorName: actor.name ?? actor.email,
     userAgent: request.headers.get("user-agent"),
   });
   return json({ ok: true, employee: getEmployee(employee.id) });

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Building2,
   Camera,
   FileText,
   Inbox,
@@ -16,7 +17,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { api } from "@/lib/api-client";
 import { clearSession, getSessionUser, getToken } from "@/lib/client-session";
+import { ROLE_LABEL, scopeLabel } from "@/lib/scope-label";
 import { useBrand } from "@/components/brand-theme";
 import { APP } from "@/lib/config";
 
@@ -26,6 +29,7 @@ const links = [
   { href: "/enroll", label: "Enrolar", icon: UserPlus },
   { href: "/admin", label: "Operación", icon: LayoutDashboard },
   { href: "/people", label: "Personas", icon: Users },
+  { href: "/structure", label: "Estructura", icon: Building2 },
   { href: "/reports", label: "Reportes", icon: BarChart3 },
   { href: "/ai", label: "Pregunta", icon: Sparkles },
   { href: "/audit", label: "Auditoría", icon: ScrollText },
@@ -56,6 +60,7 @@ export function AppShell({
   const brand = useBrand();
   const [user, setUser] = useState<ReturnType<typeof getSessionUser>>(null);
   const [allowed, setAllowed] = useState(isPublic(pathname));
+  const [scope, setScope] = useState<string | null>(null);
 
   useEffect(() => {
     setUser(getSessionUser());
@@ -67,6 +72,16 @@ export function AppShell({
     const next = window.location.pathname + window.location.search;
     router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [pathname, router]);
+
+  // Qué sedes ve este usuario: se muestra bajo el menú para que el alcance sea visible.
+  useEffect(() => {
+    const session = getSessionUser();
+    if (!session || !getToken()) return;
+    void api
+      .mySites()
+      .then(({ sites, zones }) => setScope(scopeLabel(session, sites, zones)))
+      .catch(() => undefined);
+  }, [pathname]);
 
   return (
     <div className="shell">
@@ -103,6 +118,12 @@ export function AppShell({
             );
           })}
         </nav>
+        {user && (
+          <div className="rail-scope">
+            <strong>{ROLE_LABEL[user.role] ?? user.role}</strong>
+            <span>{scope ?? "…"}</span>
+          </div>
+        )}
         <p className="rail-foot">
           Oferta software v1
           <br />
