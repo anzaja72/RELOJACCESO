@@ -68,7 +68,7 @@ import {
   upsertPunch,
 } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
-import { isHex, parseBrand } from "@/lib/brand";
+import { isHex, isLogo, parseBrand } from "@/lib/brand";
 import { buildDossier } from "@/lib/dossier";
 import { toCsv, toSimplePdf, toXlsx, zipStore } from "@/lib/pack";
 import {
@@ -139,6 +139,7 @@ async function handleGet(request: Request, parts: string[]) {
       primary: getSetting("brand_primary"),
       dark: getSetting("brand_dark"),
       light: getSetting("brand_light"),
+      logo: getSetting("brand_logo"),
     });
     return json({ brand }, 200, request);
   }
@@ -397,6 +398,7 @@ async function handleGet(request: Request, parts: string[]) {
     if (isResponse(actor)) return actor;
     const settings = listSettings();
     delete settings.supervisor_pin;
+    delete settings.brand_logo; // pesa decenas de KB; se pide por /api/v1/brand
     return json(
       {
         settings,
@@ -799,17 +801,28 @@ async function handlePatch(request: Request, parts: string[]) {
       "labor_max_weekly_hours",
     ];
     // La marca es global: solo el superadmin la cambia. Vacío = versión básica.
-    const brandKeys = ["brand_name", "brand_primary", "brand_dark", "brand_light"];
+    const brandKeys = ["brand_name", "brand_primary", "brand_dark", "brand_light", "brand_logo"];
     if (brandKeys.some((k) => k in body)) {
       if (actor.role !== "superadmin") {
         return json({ error: "Solo el superadmin cambia la marca", code: "FORBIDDEN" }, 403, request);
       }
-      const colors = brandKeys.slice(1).map((k) => body[k] ?? "");
+      const colors = brandKeys.slice(1, 4).map((k) => body[k] ?? "");
       const clearing = colors.every((c) => c === "");
       if (!clearing && !colors.every(isHex)) {
         return badRequest("Los colores deben ser hexadecimales de 6 dígitos, p. ej. #D62300", { code: "VALIDATION" }, request);
       }
-      for (const k of brandKeys) setSetting(k, k === "brand_name" ? (body[k] ?? "").trim().slice(0, 60) : (body[k] ?? "").toUpperCase());
+      const logo = body.brand_logo ?? "";
+      if (logo !== "" && !isLogo(logo)) {
+        return badRequest("El logo debe ser PNG, JPG, WebP o SVG de hasta 200 KB", { code: "VALIDATION" }, request);
+      }
+      for (const k of brandKeys) {
+        if (k === "brand_logo") {
+          // Un guardado que no menciona el logo no lo borra.
+          if (k in body) setSetting(k, logo);
+        } else {
+          setSetting(k, k === "brand_name" ? (body[k] ?? "").trim().slice(0, 60) : (body[k] ?? "").toUpperCase());
+        }
+      }
     }
     for (const [key, value] of Object.entries(body)) {
       if (key === "supervisor_pin") {

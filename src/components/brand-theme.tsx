@@ -26,16 +26,16 @@ function subscribe(cb: () => void) {
   };
 }
 
-/** Nombre de la marca del cliente (vacío si la app está en versión básica). */
-export function useBrandName() {
+/** Marca del cliente (null si la app está en versión básica). */
+export function useBrand(): Brand | null {
   const raw = useSyncExternalStore(
     subscribe,
-    () => window.localStorage.getItem(BRAND_KEY) ?? "",
+    () => document.documentElement.dataset.brandPreview ?? window.localStorage.getItem(BRAND_KEY) ?? "",
     () => "",
   );
   try {
-    return parseBrand(raw ? JSON.parse(raw) : null)?.name ?? "";
+    return parseBrand(raw ? JSON.parse(raw) : null);
   } catch {
-    return "";
+    return null;
   }
 }

@@ -60,9 +60,9 @@
     "semantic_hash": "aaf1b27aa5688985e719c92f5b706389"
   },
   "src/app/api/employees/[id]/templates/route.ts": {
-    "mtime": 1790306783.0815628,
-    "ast_hash": "784e76377574cf3702ce175f867341d2",
-    "semantic_hash": "784e76377574cf3702ce175f867341d2"
+    "mtime": 1790889308.5807996,
+    "ast_hash": "d1cb1ca9055619e6cce0ae8da3976cb8",
+    "semantic_hash": ""
   },
   "src/app/api/employees/route.ts": {
     "mtime": 1790870337.3356016,
@@ -350,8 +350,8 @@
     "semantic_hash": ""
   },
   "src/components/app-shell.tsx": {
-    "mtime": 1790870765.9163866,
-    "ast_hash": "af3c064957a9f285c7907de5c4c082bf",
+    "mtime": 1791045887.3569071,
+    "ast_hash": "32e86334a1cfe27942453f6c2f7e30ce",
     "semantic_hash": ""
   },
   "src/lib/webhook.ts": {
@@ -405,8 +405,8 @@
     "semantic_hash": ""
   },
   "src/app/api/v1/[...path]/route.ts": {
-    "mtime": 1790870900.1482882,
-    "ast_hash": "e29024a1e66c861ff56eeffbfc406f64",
+    "mtime": 1791045887.356439,
+    "ast_hash": "cac3448bbd39e0203109f5d9877c51cb",
     "semantic_hash": ""
   },
   "src/app/api/v1/route.ts": {
@@ -585,13 +585,13 @@
     "semantic_hash": ""
   },
   "src/components/brand-settings.tsx": {
-    "mtime": 1790870864.6261225,
-    "ast_hash": "4cbd5762273191bef5a807fdaf7f52e8",
+    "mtime": 1791045897.78646,
+    "ast_hash": "a5e13d6c614a3de0c4b4ed8ba1f7d4e1",
     "semantic_hash": ""
   },
   "src/components/brand-theme.tsx": {
-    "mtime": 1790870752.2356994,
-    "ast_hash": "2adf8169eb23258ab6013e109ddaba73",
+    "mtime": 1791045948.3368177,
+    "ast_hash": "c306502e2deae612b7bd15217299c129",
     "semantic_hash": ""
   },
   "src/components/kiosk-offline.tsx": {
@@ -610,8 +610,8 @@
     "semantic_hash": ""
   },
   "src/lib/brand.ts": {
-    "mtime": 1790870747.0321398,
-    "ast_hash": "f46aab1c0ace2106c41ef99d5705ee5e",
+    "mtime": 1791045948.3366191,
+    "ast_hash": "3d2bf78f6b847188c8e782e13395f3a7",
     "semantic_hash": ""
   },
   "src/lib/dossier.ts": {
@@ -642,6 +642,11 @@
   "public/icon-512.png": {
     "mtime": 1790870397.9741395,
     "ast_hash": "2913ad2e19cd83e2441c7fede2415f4b",
+    "semantic_hash": ""
+  },
+  "docs/PRUEBAS_POR_ROL.md": {
+    "mtime": 1790889386.0546,
+    "ast_hash": "47c939c66af54df5a3dc007800297beb",
     "semantic_hash": ""
   }
 }

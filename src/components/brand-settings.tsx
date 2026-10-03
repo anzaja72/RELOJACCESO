@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api-client";
-import { PRESETS, applyBrand, contrast, isHex, parseBrand, type Brand } from "@/lib/brand";
+import { MAX_LOGO_CHARS, PRESETS, applyBrand, contrast, isHex, isLogo, parseBrand, type Brand } from "@/lib/brand";
 
-const EMPTY: Brand = { name: "", primary: "", dark: "", light: "" };
+const EMPTY: Brand = { name: "", primary: "", dark: "", light: "", logo: "" };
 
 const FIELDS: Array<{ key: "primary" | "dark" | "light"; label: string; hint: string }> = [
   { key: "primary", label: "Color de acento", hint: "botones y menú activo" },
@@ -43,6 +43,23 @@ export function BrandSettings() {
     applyBrand(parseBrand(next), { persist: false });
   }
 
+  function pickLogo(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      if (!isLogo(url)) {
+        setMessage({
+          ok: false,
+          text: `El logo debe ser PNG, JPG, WebP o SVG de hasta ${Math.round((MAX_LOGO_CHARS * 0.75) / 1000)} KB.`,
+        });
+        return;
+      }
+      edit({ ...draft, logo: url });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function save() {
     if (!basic && !valid) {
       setMessage({ ok: false, text: "Los tres colores deben ser hexadecimales completos, p. ej. #D62300." });
@@ -54,6 +71,7 @@ export function BrandSettings() {
         brand_primary: basic ? "" : draft.primary,
         brand_dark: basic ? "" : draft.dark,
         brand_light: basic ? "" : draft.light,
+        brand_logo: basic ? "" : draft.logo,
       });
       const next = basic ? null : valid;
       applyBrand(next);
@@ -81,7 +99,7 @@ export function BrandSettings() {
           Versión básica
         </Button>
         {Object.entries(PRESETS).map(([label, brand]) => (
-          <Button key={label} variant="outline" className="shade" onClick={() => edit(brand)}>
+          <Button key={label} variant="outline" className="shade" onClick={() => edit({ ...brand, logo: draft.logo })}>
             {label}
           </Button>
         ))}
@@ -111,6 +129,34 @@ export function BrandSettings() {
             </div>
           </div>
         ))}
+        <div>
+          <Label>
+            Logo <span className="muted">· PNG, JPG, WebP o SVG; aparece en la barra lateral</span>
+          </Label>
+          <div className="flex items-center gap-3">
+            {draft.logo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={draft.logo} alt="Logo cargado" style={{ height: 40, width: "auto", maxWidth: 56, objectFit: "contain" }} />
+            )}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              aria-label="Subir logo"
+              onChange={(e) => {
+                pickLogo(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            {draft.logo && (
+              <Button variant="outline" className="shade" onClick={() => edit({ ...draft, logo: "" })}>
+                Quitar logo
+              </Button>
+            )}
+          </div>
+          <p className="muted" style={{ marginTop: 6 }}>
+            Se usa solo con los tres colores completos. Suba únicamente un logo que el cliente haya autorizado.
+          </p>
+        </div>
         {lowContrast && (
           <p className="err-text">El texto oscuro casi no se distingue del fondo: elija colores con más contraste.</p>
         )}

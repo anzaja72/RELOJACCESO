@@ -9,6 +9,8 @@ export type Brand = {
   dark: string;
   /** Fondo claro de la app. */
   light: string;
+  /** Logo como data URL (vacío = sin logo). Nunca una URL externa. */
+  logo: string;
 };
 
 export const BRAND_VARS_KEY = "reloj-cr-brand-vars";
@@ -17,10 +19,15 @@ export const BRAND_EVENT = "reloj-cr-brand";
 
 // Paleta del brand book de Burger King Colombia: Scarlet Red, Cocoa Brown, Bone White.
 export const PRESETS: Record<string, Brand> = {
-  "Burger King Colombia": { name: "Burger King Colombia", primary: "#D62300", dark: "#502314", light: "#F5EBDC" },
+  "Burger King Colombia": { name: "Burger King Colombia", primary: "#D62300", dark: "#502314", light: "#F5EBDC", logo: "" },
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
+// ~200 KB de imagen en base64. Solo data URL: no se cargan imágenes de terceros.
+export const MAX_LOGO_CHARS = 280_000;
+const LOGO = /^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+export const isLogo = (v: unknown): v is string =>
+  typeof v === "string" && v.length <= MAX_LOGO_CHARS && LOGO.test(v);
 export const isHex = (v: unknown): v is string => typeof v === "string" && HEX.test(v);
 
 export function parseBrand(raw: Partial<Record<keyof Brand, unknown>> | null | undefined): Brand | null {
@@ -30,6 +37,7 @@ export function parseBrand(raw: Partial<Record<keyof Brand, unknown>> | null | u
     primary: raw.primary.toUpperCase(),
     dark: raw.dark.toUpperCase(),
     light: raw.light.toUpperCase(),
+    logo: isLogo(raw.logo) ? raw.logo : "",
   };
 }
 
@@ -94,12 +102,18 @@ export function brandVars({ primary, dark, light }: Brand): Record<string, strin
 /** Aplica la marca al documento y la recuerda para que el kiosco la tenga sin red. */
 export function applyBrand(brand: Brand | null, { persist = true }: { persist?: boolean } = {}) {
   const root = document.documentElement;
-  const known = Object.keys(brandVars({ name: "", primary: "#000000", dark: "#000000", light: "#ffffff" }));
+  const known = Object.keys(brandVars({ name: "", primary: "#000000", dark: "#000000", light: "#ffffff", logo: "" }));
   for (const k of known) root.style.removeProperty(k);
   if (brand) {
     for (const [k, v] of Object.entries(brandVars(brand))) root.style.setProperty(k, v);
   }
-  if (!persist) return;
+  // Vista previa: el logo y el nombre de la barra leen esto antes que lo guardado.
+  if (!persist) {
+    root.dataset.brandPreview = JSON.stringify(brand);
+    window.dispatchEvent(new Event(BRAND_EVENT));
+    return;
+  }
+  delete root.dataset.brandPreview;
   try {
     if (brand) {
       window.localStorage.setItem(BRAND_VARS_KEY, JSON.stringify(brandVars(brand)));

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearSession, getSessionUser, getToken } from "@/lib/client-session";
-import { useBrandName } from "@/components/brand-theme";
+import { useBrand } from "@/components/brand-theme";
 import { APP } from "@/lib/config";
 
 const links = [
@@ -53,7 +53,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const brandName = useBrandName();
+  const brand = useBrand();
   const [user, setUser] = useState<ReturnType<typeof getSessionUser>>(null);
   const [allowed, setAllowed] = useState(isPublic(pathname));
 
@@ -72,10 +72,16 @@ export function AppShell({
     <div className="shell">
       <aside className="rail">
         <div className="rail-brand">
-          <span className="rail-avatar">RC</span>
+          {brand?.logo ? (
+            // data URL del cliente: next/image no aporta nada aquí
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logo} alt={brand.name || "Logo"} className="rail-logo" />
+          ) : (
+            <span className="rail-avatar">RC</span>
+          )}
           <div>
             <strong>{APP.name}</strong>
-            <small>{brandName || APP.rfp}</small>
+            <small>{brand?.name || APP.rfp}</small>
           </div>
         </div>
         <nav className="rail-nav">
