@@ -29,7 +29,9 @@ export default function LoginPage() {
       });
       setSession(res.token, res.user as SessionUser);
       const next = new URLSearchParams(window.location.search).get("next");
-      router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/admin");
+      // Solo rutas relativas del mismo origen: sin //, sin \ y sin caracteres de control.
+      const safeNext = next && /^\/(?![\/\\])[^\\\u0000-\u001f]*$/.test(next) ? next : "/admin";
+      router.push(safeNext);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo entrar");
     } finally {

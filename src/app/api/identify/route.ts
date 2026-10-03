@@ -1,4 +1,4 @@
-import { isKioskDenied, kioskSite, requireKiosk } from "@/lib/auth";
+import { isKioskDenied, isResponse, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { MATCH_THRESHOLD } from "@/lib/config";
 import { getEmployee, listEmployees, listTemplates } from "@/lib/db";
 import { identifyFace } from "@/lib/match";
@@ -19,7 +19,9 @@ export async function POST(request: Request) {
   if (!body.descriptor || body.descriptor.length !== 128) {
     return badRequest("descriptor de 128 dimensiones es obligatorio");
   }
-  const siteId = kioskSite(caller, body.siteId);
+  const resolved = resolveKioskSite(request, caller, body.siteId);
+  if (isResponse(resolved)) return resolved;
+  const siteId = resolved.site;
   const employees = listEmployees(siteId).filter((e) => e.active);
   const templates = listTemplates(siteId);
   const gallery = employees.map((employee) => ({

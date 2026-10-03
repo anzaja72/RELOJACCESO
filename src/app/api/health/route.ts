@@ -1,5 +1,6 @@
 import { readActor } from "@/lib/auth";
-import { getDb, listTerminals, statsToday } from "@/lib/db";
+import { getDb, listTerminals, statsTodayForSites } from "@/lib/db";
+import { allowedSiteIds, filterBySite } from "@/lib/scope";
 import { json } from "@/lib/http";
 import { APP, TIMEZONE } from "@/lib/config";
 
@@ -17,6 +18,11 @@ export function GET(request: Request) {
     time: new Date().toISOString(),
     timezone: TIMEZONE,
   };
-  if (!readActor(request)) return json(base);
-  return json({ ...base, terminals: listTerminals(), today: statsToday() });
+  const actor = readActor(request);
+  if (!actor) return json(base);
+  return json({
+    ...base,
+    terminals: filterBySite(actor, listTerminals(), (t) => t.siteId),
+    today: statsTodayForSites(allowedSiteIds(actor)),
+  });
 }

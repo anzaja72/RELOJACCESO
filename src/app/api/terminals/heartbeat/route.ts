@@ -1,4 +1,4 @@
-import { isKioskDenied, kioskSite, kioskTerminalId, requireKiosk } from "@/lib/auth";
+import { isKioskDenied, isResponse, kioskTerminalId, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { heartbeat } from "@/lib/db";
 import { badRequest, json, parseJson, serverError } from "@/lib/http";
 
@@ -16,7 +16,9 @@ export async function POST(request: Request) {
       path?: string;
     }>(request);
     body.id = kioskTerminalId(caller, body.id);
-    body.siteId = kioskSite(caller, body.siteId);
+    const resolvedSite = resolveKioskSite(request, caller, body.siteId);
+    if (isResponse(resolvedSite)) return resolvedSite;
+    body.siteId = resolvedSite.site;
     if (!body.id || !body.siteId) {
       return badRequest("id y siteId son obligatorios");
     }

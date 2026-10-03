@@ -5,8 +5,10 @@ import { listPunches } from "@/lib/db";
 export const runtime = "nodejs";
 
 function csvEscape(value: unknown) {
-  const text = value == null ? "" : String(value);
-  if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  const raw = value == null ? "" : String(value);
+  // Neutraliza fórmulas de hoja de cálculo (=, +, -, @, tab, CR al inicio).
+  const text = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
   return text;
 }
 

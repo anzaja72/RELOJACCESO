@@ -1,7 +1,7 @@
-import { isKioskDenied, kioskSite, kioskTerminalId, requireActor, requireKiosk } from "@/lib/auth";
+import { isKioskDenied, isResponse, kioskTerminalId, requireActor, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { eventTypes } from "@/lib/db-ops";
-import { listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
+import { employeePunchableAtSite, listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import { filterBySite } from "@/lib/scope";
 import type { SyncItem } from "@/lib/types";
@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     const body = await parseJson<Partial<SyncItem> & { offline?: boolean }>(
       request,
     );
-    body.siteId = kioskSite(caller, body.siteId);
+    const resolvedSite = resolveKioskSite(request, caller, body.siteId);
+    if (isResponse(resolvedSite)) return resolvedSite;
+    body.siteId = resolvedSite.site;
     body.terminalId = kioskTerminalId(caller, body.terminalId);
     if (!body.id || !body.siteId || !body.type || !body.capturedAt || !body.terminalId) {
       return badRequest("id, siteId, type, capturedAt y terminalId son obligatorios");
@@ -45,6 +47,9 @@ export async function POST(request: Request) {
       return badRequest(`type debe ser uno de: ${eventTypes().join(", ")}`);
     }
 
+    if (body.employeeId && !employeePunchableAtSite(body.employeeId, body.siteId)) {
+      return badRequest("Colaborador inexistente, inactivo o de otra sede");
+    }
     let decision = body.decision ?? (body.employeeId ? "matched" : "unknown");
     if (body.employeeId && decision === "matched") {
       const dup = recentDuplicate({

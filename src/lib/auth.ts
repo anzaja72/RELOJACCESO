@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSiteByCode, terminalTokenActive } from "@/lib/db";
+import { siteIdsForScope } from "@/lib/db-ops";
 import { json } from "@/lib/http";
 import { integrationApiKey } from "@/lib/secrets";
 import {
@@ -94,7 +95,7 @@ export function requireApprover(request: Request): Actor | NextResponse {
   return actor;
 }
 
-export function isResponse(value: Actor | NextResponse): value is NextResponse {
+export function isResponse(value: unknown): value is NextResponse {
   return value instanceof NextResponse;
 }
 
@@ -137,6 +138,32 @@ export function kioskSite(caller: KioskCaller, requested?: string | null) {
   if (caller.kind === "terminal") return caller.siteId;
   if (!requested) return undefined;
   return getSiteByCode(requested)?.id ?? requested;
+}
+
+/**
+ * Sede efectiva de una llamada de kiosco, ya validada contra el alcance.
+ * Una terminal queda atada a su sede; un usuario con alcance limitado solo puede
+ * elegir sedes dentro de su alcance (o su única sede si no indica ninguna).
+ * `site` undefined solo ocurre para quien ve todo y no pidió una sede.
+ */
+export function resolveKioskSite(
+  request: Request,
+  caller: KioskCaller,
+  requested?: string | null,
+): { site: string | undefined } | NextResponse {
+  if (caller.kind === "terminal") return { site: caller.siteId };
+  const resolved = requested ? (getSiteByCode(requested)?.id ?? requested) : undefined;
+  const allowed = siteIdsForScope({
+    role: caller.actor.role,
+    scopeType: caller.actor.scopeType,
+    scopeId: caller.actor.scopeId,
+  });
+  if (!allowed) return { site: resolved };
+  const site = resolved ?? (allowed.length === 1 ? allowed[0] : undefined);
+  if (!site || !allowed.includes(site)) {
+    return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+  }
+  return { site };
 }
 
 export function kioskTerminalId(caller: KioskCaller, requested?: string | null) {

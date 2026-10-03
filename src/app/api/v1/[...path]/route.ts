@@ -4,8 +4,8 @@ import { ulid } from "ulidx";
 import {
   isKioskDenied,
   isResponse,
-  kioskSite,
   kioskTerminalId,
+  resolveKioskSite,
   readActor,
   requireKiosk,
   requireActor,
@@ -22,6 +22,7 @@ import {
   ensureOfflineAlerts,
   eventTypes,
   findUserByEmail,
+  findUserById,
   getSetting,
   incrementalsPunches,
   integrityReport,
@@ -54,6 +55,7 @@ import {
 import {
   activateTerminal,
   createEmployee,
+  employeePunchableAtSite,
   getDb,
   getEmployee,
   listPunches,
@@ -64,7 +66,7 @@ import {
   recentDuplicate,
   recordEvent,
   revokeTerminal,
-  statsToday,
+  statsTodayForSites,
   upsertPunch,
 } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
@@ -83,6 +85,9 @@ import {
   verifyTotp,
 } from "@/lib/session";
 import type { PunchType, SyncItem } from "@/lib/types";
+
+// Alertas que un kiosco puede reportar.
+const DEVICE_ALERT_TYPES = new Set(["sync.failed", "terminal.offline", "camera.error"]);
 
 export const runtime = "nodejs";
 
@@ -112,13 +117,14 @@ async function handleGet(request: Request, parts: string[]) {
       time: new Date().toISOString(),
       timezone: TIMEZONE,
     };
-    if (!readActor(request)) return json(base, 200, request);
+    const healthActor = readActor(request);
+    if (!healthActor) return json(base, 200, request);
     ensureOfflineAlerts();
     return json(
       {
         ...base,
-        terminals: listTerminals(),
-        today: statsToday(),
+        terminals: filterBySite(healthActor, listTerminals(), (t) => t.siteId),
+        today: statsTodayForSites(allowedSiteIds(healthActor)),
         rateLimit: { windowSec: 60, max: 80, loginMax: 10 },
       },
       200,
@@ -302,7 +308,7 @@ async function handleGet(request: Request, parts: string[]) {
     const actor = requireReader(request);
     if (isResponse(actor)) return actor;
     recordEvent(getDb(), "export.pack", { actor: actor.email, format: url.searchParams.get("format") });
-    const dump = dumpMasters(allowedSiteIds(actor));
+    const dump = dumpMasters(allowedSiteIds(actor), { includeUsers: actor.role === "superadmin" });
     const format = url.searchParams.get("format") || "json";
     const punchRows = (dump.punches as Array<Record<string, unknown>>).map((p) => ({
       id: p.id,
@@ -470,6 +476,14 @@ async function handlePost(request: Request, parts: string[]) {
     if (actor.via === "api_key") {
       return json({ error: "Active TOTP con un usuario JWT", code: "FORBIDDEN" }, 403, request);
     }
+    // Cambiar un factor ya activo exige demostrar el factor actual: una sesión robada no basta.
+    const current = findUserById(actor.id);
+    if (current?.totp_enabled && current.totp_secret) {
+      const proof = await parseJson<{ totp?: string }>(request).catch(() => ({ totp: undefined }));
+      if (!proof.totp || !verifyTotp(current.totp_secret, proof.totp)) {
+        return json({ error: "Indique su código TOTP actual", code: "TOTP_REQUIRED" }, 403, request);
+      }
+    }
     const secret = newTotpSecret();
     enableTotp(actor.id, secret);
     recordEvent(getDb(), "auth.totp_enabled", { userId: actor.id });
@@ -525,6 +539,10 @@ async function handlePost(request: Request, parts: string[]) {
   if (parts[0] === "terminals" && parts[1] && parts[2] === "revoke" && parts.length === 3) {
     const actor = requireApprover(request);
     if (isResponse(actor)) return actor;
+    const terminal = listTerminals().find((t) => t.id === parts[1]);
+    if (!terminal || !siteInScope(actor, terminal.siteId)) {
+      return json({ error: "Terminal no encontrada o ya revocada", code: "NOT_FOUND" }, 404, request);
+    }
     if (!revokeTerminal(parts[1], actor.email)) {
       return json({ error: "Terminal no encontrada o ya revocada", code: "NOT_FOUND" }, 404, request);
     }
@@ -574,7 +592,9 @@ async function handlePost(request: Request, parts: string[]) {
           employeePin?: string;
         }
       >(request);
-      body.siteId = kioskSite(caller, body.siteId);
+      const resolvedSite = resolveKioskSite(request, caller, body.siteId);
+      if (isResponse(resolvedSite)) return resolvedSite;
+      body.siteId = resolvedSite.site;
       body.terminalId = kioskTerminalId(caller, body.terminalId);
       if (!body.siteId || !body.type || !body.terminalId) {
         return badRequest("siteId, type y terminalId son obligatorios", { code: "VALIDATION" }, request);
@@ -628,6 +648,9 @@ async function handlePost(request: Request, parts: string[]) {
       if (!body.id || !body.capturedAt) {
         return badRequest("id y capturedAt son obligatorios", { code: "VALIDATION" }, request);
       }
+      if (body.employeeId && !employeePunchableAtSite(body.employeeId, body.siteId)) {
+        return badRequest("Colaborador inexistente, inactivo o de otra sede", { code: "VALIDATION" }, request);
+      }
       let decision = body.decision ?? (body.employeeId ? "matched" : "unknown");
       if (body.employeeId && decision === "matched") {
         const dup = recentDuplicate({
@@ -679,12 +702,24 @@ async function handlePost(request: Request, parts: string[]) {
       if (punchSite && !siteInScope(actor, punchSite.site_id)) {
         return json({ error: "Marcación fuera de su alcance", code: "FORBIDDEN" }, 403, request);
       }
+      // Valores corregidos válidos: una hora ilegible rompería los reportes de todos los alcances.
+      let newTs: string | undefined;
+      if (body.newTs != null && body.newTs !== "") {
+        const parsed = new Date(body.newTs);
+        if (typeof body.newTs !== "string" || Number.isNaN(parsed.getTime())) {
+          return badRequest("newTs debe ser una fecha ISO válida", { code: "VALIDATION" }, request);
+        }
+        newTs = parsed.toISOString();
+      }
+      if (body.newType != null && !eventTypes().includes(body.newType)) {
+        return badRequest(`newType debe ser uno de: ${eventTypes().join(", ")}`, { code: "VALIDATION" }, request);
+      }
       const row = insertCorrection({
         punchId: body.punchId,
         reason: body.reason.trim(),
         requestedBy: actor.email,
         approvedBy: actor.email,
-        newTs: body.newTs,
+        newTs,
         newType: body.newType,
       });
       if (!row) return json({ error: "Marcación no encontrada", code: "NOT_FOUND" }, 404, request);
@@ -712,7 +747,7 @@ async function handlePost(request: Request, parts: string[]) {
       return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
     }
     const id = upsertSchedule({
-      employeeId: body.employeeId,
+      employeeId: target.id,
       weekday: body.weekday,
       startHm: body.startHm,
       endHm: body.endHm,
@@ -737,7 +772,7 @@ async function handlePost(request: Request, parts: string[]) {
     if (!target || !siteInScope(actor, target.siteId)) {
       return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
     }
-    return json({ exception: insertException({ ...body, createdBy: actor.email } as never) }, 201, request);
+    return json({ exception: insertException({ ...body, employeeId: target.id, createdBy: actor.email } as never) }, 201, request);
   }
 
   if (route === "alerts") {
@@ -749,7 +784,18 @@ async function handlePost(request: Request, parts: string[]) {
       request,
     );
     if (!body.type || !body.message) return badRequest("type y message son obligatorios", { code: "VALIDATION" }, request);
-    const id = insertAlert(body.type, body.message, body.siteId, body.employeeId);
+    // Una terminal solo reporta alertas de dispositivo y de su propia sede; los tipos de evento
+    // del sistema (auth.*, punch.*, settings.*...) los escribe solo el servidor.
+    if (!DEVICE_ALERT_TYPES.has(body.type)) {
+      return badRequest("type no permitido", { code: "VALIDATION" }, request);
+    }
+    const resolvedAlertSite = resolveKioskSite(request, caller, body.siteId);
+    if (isResponse(resolvedAlertSite)) return resolvedAlertSite;
+    const message = String(body.message).slice(0, 500);
+    const alertEmployee = body.employeeId && resolvedAlertSite.site && employeePunchableAtSite(body.employeeId, resolvedAlertSite.site)
+      ? body.employeeId
+      : undefined;
+    const id = insertAlert(body.type, message, resolvedAlertSite.site, alertEmployee);
     return json({ id }, 201, request);
   }
 

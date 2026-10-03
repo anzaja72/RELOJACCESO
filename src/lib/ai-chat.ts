@@ -1,7 +1,7 @@
 import { generateBriefing } from "@/lib/ai-briefing";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { listPunches } from "@/lib/db";
-import { listCorrections, listEmployeesScoped, reportForDay, todayLocal, type Scope } from "@/lib/db-ops";
+import { listCorrections, listEmployeesScoped, reportForDay, siteIdsForScope, todayLocal, type Scope } from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
 import { listTerminals } from "@/lib/db";
 import { dayBoundsUtc } from "@/lib/config";
@@ -35,11 +35,14 @@ function detectIntent(q: string): string {
 
 function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   const report = reportForDay({ day, siteId, scope });
+  // Sin alcance explícito no se devuelve nada fuera de la sede pedida; null = todas las sedes.
+  const allowed = scope ? siteIdsForScope(scope) : [];
+  const inSites = (site: string | null | undefined) => !allowed || (site != null && allowed.includes(site));
   const punches = listPunches({
     siteId,
     ...dayBoundsUtc(day),
     limit: 300,
-  });
+  }).filter((p) => inSites(p.siteId));
   if (intent === "present") {
     const rows = report.rows.filter((r) => ["present", "on_time", "late"].includes(r.status));
     return {
@@ -89,6 +92,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
     return {
       label: "terminales",
       rows: listTerminals()
+        .filter((t) => inSites(t.siteId))
         .filter((t) => !siteId || t.siteId === siteId)
         .map((t) => ({ id: t.id, label: t.label, online: t.online, lastSeen: t.lastSeen })),
     };
@@ -104,7 +108,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   if (intent === "corrections") {
     return {
       label: "correcciones",
-      rows: (listCorrections() as Array<Record<string, unknown>>).slice(0, 30).map((c) => ({
+      rows: (listCorrections(undefined, allowed) as Array<Record<string, unknown>>).slice(0, 30).map((c) => ({
         id: c.id,
         punchId: c.punch_id,
         reason: c.reason,
@@ -116,7 +120,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   if (intent === "anomalies") {
     return {
       label: "anomalías",
-      rows: listAnomalies({ day, siteId }).map((a) => ({
+      rows: listAnomalies({ day, siteId }).filter((a) => inSites(a.siteId)).map((a) => ({
         id: a.id,
         kind: a.kind,
         message: a.message,
@@ -177,7 +181,7 @@ export async function answerChat(input: {
     return { answer: REFUSE, intent, cites: [], source: "canned", missing: false };
   }
   if (intent === "briefing") {
-    const briefing = await generateBriefing({ day, siteId: input.siteId });
+    const briefing = await generateBriefing({ day, siteId: input.siteId, scope: input.scope });
     return {
       answer: briefing.bullets.map((b, i) => `${i + 1}. ${b.text} (${b.href})`).join("\n"),
       intent,

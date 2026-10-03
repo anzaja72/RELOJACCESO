@@ -1,6 +1,7 @@
 import { answerChat, chatSeedHints } from "@/lib/ai-chat";
 import { llmInfo } from "@/lib/ai-llm";
 import { isResponse, requireActor } from "@/lib/auth";
+import { siteInScope } from "@/lib/scope";
 import { getDb, recordEvent } from "@/lib/db";
 import { json, parseJson, rateLimit, serverError } from "@/lib/http";
 
@@ -23,6 +24,9 @@ export async function POST(request: Request) {
     const body = await parseJson<{ question?: string; day?: string; siteId?: string }>(request);
     if (!body.question?.trim()) {
       return json({ error: "question es obligatorio", code: "VALIDATION" }, 400, request);
+    }
+    if (body.siteId && !siteInScope(actor, body.siteId)) {
+      return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
     }
     const result = await answerChat({
       question: body.question.trim(),

@@ -1,6 +1,6 @@
-import { isKioskDenied, kioskSite, kioskTerminalId, requireKiosk } from "@/lib/auth";
+import { isKioskDenied, isResponse, kioskTerminalId, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
-import { recentDuplicate, upsertPunch } from "@/lib/db";
+import { employeePunchableAtSite, recentDuplicate, upsertPunch } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import type { SyncItem } from "@/lib/types";
 
@@ -20,11 +20,14 @@ export async function POST(request: Request) {
     const accepted: string[] = [];
     const duplicates: string[] = [];
     for (const item of items) {
-      item.siteId = kioskSite(caller, item.siteId) ?? "";
+      const resolvedSite = resolveKioskSite(request, caller, item.siteId);
+      if (isResponse(resolvedSite)) continue;
+      item.siteId = resolvedSite.site ?? "";
       item.terminalId = kioskTerminalId(caller, item.terminalId);
       if (!item.id || !item.siteId || !item.type || !item.capturedAt || !item.terminalId) {
         continue;
       }
+      if (item.employeeId && !employeePunchableAtSite(item.employeeId, item.siteId)) continue;
       let decision = item.decision;
       if (item.employeeId && decision === "matched") {
         const dup = recentDuplicate({

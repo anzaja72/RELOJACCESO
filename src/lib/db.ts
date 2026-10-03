@@ -557,6 +557,17 @@ export function getEmployee(id: string): Employee | undefined {
   return row ? mapEmployee(row) : undefined;
 }
 
+/**
+ * Una marcación con empleado solo se acepta si ese empleado existe, está activo,
+ * no fue dado de baja y pertenece a la sede donde se marca.
+ */
+export function employeePunchableAtSite(employeeId: string, siteId: string): boolean {
+  const employee = getEmployee(employeeId);
+  if (!employee || !employee.active || employee.deleted) return false;
+  const site = getSiteByCode(siteId);
+  return Boolean(site) && employee.siteId === site!.id;
+}
+
 export function createEmployee(input: {
   name: string;
   code: string;
@@ -913,11 +924,11 @@ export function heartbeat(input: {
       `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
-         site_id = excluded.site_id,
          label = excluded.label,
          last_seen = excluded.last_seen,
          user_agent = excluded.user_agent,
-         path = excluded.path`,
+         path = excluded.path
+       WHERE terminals.site_id = excluded.site_id`,
     )
     .run(
       input.id,
@@ -999,6 +1010,21 @@ export function listEvents(limit = 50) {
     payload: string;
     created_at: string;
   }>;
+}
+
+/** Estadísticas del día limitadas a las sedes permitidas (null = todas). */
+export function statsTodayForSites(siteIds: string[] | null) {
+  if (!siteIds) return statsToday();
+  const total = { present: 0, absent: 0, enrolled: 0, punches: 0, unknown: 0 };
+  for (const id of siteIds) {
+    const s = statsToday(id);
+    total.present += s.present;
+    total.absent += s.absent;
+    total.enrolled += s.enrolled;
+    total.punches += s.punches;
+    total.unknown += s.unknown;
+  }
+  return total;
 }
 
 export function statsToday(siteId?: string) {

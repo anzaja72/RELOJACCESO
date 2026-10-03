@@ -11,8 +11,10 @@ export function toCsv(rows: Record<string, unknown>[]): string {
   const line = (r: Record<string, unknown>) =>
     keys
       .map((k) => {
-        const v = r[k] == null ? "" : String(r[k]);
-        return /[",\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v;
+        const raw = r[k] == null ? "" : String(r[k]);
+        // Neutraliza fórmulas de hoja de cálculo (=, +, -, @, tab, CR al inicio).
+        const v = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+        return /[",\n\r]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v;
       })
       .join(",");
   return [keys.join(","), ...rows.map(line)].join("\n");

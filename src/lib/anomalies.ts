@@ -266,6 +266,14 @@ export function scanAnomalies(day?: string) {
   return { day: d, created: created.length, updated: updated.length, anomalies: listAnomalies({ day: d }) };
 }
 
+/** Una anomalía por id, sin el tope de 200 de `listAnomalies`. */
+export function getAnomaly(id: string) {
+  const row = getDb().prepare("SELECT * FROM anomalies WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? mapAnomaly(row) : null;
+}
+
 export function reviewAnomaly(id: string, reviewer: string) {
   const db = getDb();
   const row = db.prepare("SELECT * FROM anomalies WHERE id = ?").get(id) as Record<string, unknown> | undefined;

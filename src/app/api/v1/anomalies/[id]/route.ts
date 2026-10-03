@@ -1,4 +1,4 @@
-import { listAnomalies, reviewAnomaly } from "@/lib/anomalies";
+import { getAnomaly, reviewAnomaly } from "@/lib/anomalies";
 import { isResponse, requireApprover } from "@/lib/auth";
 import { siteInScope } from "@/lib/scope";
 import { json, parseJson, serverError } from "@/lib/http";
@@ -17,8 +17,8 @@ export async function PATCH(
     if (body.reviewed === false) {
       return json({ error: "Solo se marca revisada", code: "VALIDATION" }, 400, request);
     }
-    const known = listAnomalies().find((a) => a.id === id);
-    if (known && !siteInScope(actor, known.siteId)) {
+    const known = getAnomaly(id);
+    if (!known || !siteInScope(actor, known.siteId)) {
       return json({ error: "No encontrada", code: "NOT_FOUND" }, 404, request);
     }
     const row = reviewAnomaly(id, actor.email);

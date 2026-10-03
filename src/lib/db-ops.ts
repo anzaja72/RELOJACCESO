@@ -462,6 +462,8 @@ export function reportForDay(input: {
     },
     rows: filtered,
     terminals: listTerminals().filter((t) => {
+      const scopedSites = input.scope ? siteIdsForScope(input.scope) : null;
+      if (scopedSites && !scopedSites.includes(t.siteId)) return false;
       if (input.siteId && t.siteId !== input.siteId) return false;
       const site = siteById.get(t.siteId);
       if (input.countryId && site?.countryId !== input.countryId) return false;
@@ -503,7 +505,8 @@ export function ensureOfflineAlerts() {
   }
 }
 
-export function dumpMasters(siteIds?: string[] | null) {
+export function dumpMasters(siteIds?: string[] | null, opts?: { includeUsers?: boolean }) {
+  const includeUsers = Boolean(opts?.includeUsers);
   const db = getDb();
   // siteIds = null/undefined: todas las sedes; si no, solo las del alcance del usuario.
   const only = <T>(rows: T[], site: (row: T) => string | null | undefined) =>
@@ -513,7 +516,7 @@ export function dumpMasters(siteIds?: string[] | null) {
     zones: listZones(),
     sites: only(listSites(), (s) => s.id),
     employees: only(listEmployees(undefined, { includeDeleted: true }), (e) => e.siteId),
-    users: siteIds ? [] : listUsersPublic(),
+    users: siteIds || !includeUsers ? [] : listUsersPublic(),
     schedules: listSchedules(undefined, siteIds),
     exceptions: listExceptions(undefined, siteIds),
     settings: Object.fromEntries(

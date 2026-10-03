@@ -1,6 +1,7 @@
 import { generateBriefing } from "@/lib/ai-briefing";
 import { llmInfo } from "@/lib/ai-llm";
 import { isResponse, requireActor } from "@/lib/auth";
+import { siteInScope } from "@/lib/scope";
 import { getDb, recordEvent } from "@/lib/db";
 import { json, rateLimit, serverError } from "@/lib/http";
 
@@ -17,9 +18,14 @@ export async function POST(request: Request) {
   if (isResponse(actor)) return actor;
   try {
     const url = new URL(request.url);
+    const site = url.searchParams.get("site") ?? undefined;
+    if (site && !siteInScope(actor, site)) {
+      return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
+    }
     const briefing = await generateBriefing({
       day: url.searchParams.get("day") ?? undefined,
-      siteId: url.searchParams.get("site") ?? undefined,
+      siteId: site,
+      scope: { role: actor.role, scopeType: actor.scopeType, scopeId: actor.scopeId },
     });
     recordEvent(getDb(), "ai.briefing", {
       actor: actor.email,
