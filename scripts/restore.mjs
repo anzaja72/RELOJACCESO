@@ -10,5 +10,7 @@ const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const sandbox = process.env.SANDBOX === "true";
 const dest = path.join(dataDir, sandbox ? "asistencia.sandbox.db" : "asistencia.db");
 fs.mkdirSync(dataDir, { recursive: true });
+// Con el servidor detenido: los archivos -wal y -shm de la base anterior no deben mezclarse con la copia.
+for (const ext of ["-wal", "-shm"]) fs.rmSync(dest + ext, { force: true });
 fs.copyFileSync(from, dest);
 console.log("Restaurado:", dest);

@@ -19,7 +19,7 @@ CSV, XLSX (Office Open XML) y PDF cubren el reporte operativo de marcaciones.
 ## Copias de seguridad
 
 ```bash
-npm run backup    # copia data/asistencia.db → data/backups/asistencia-<ISO>.db
+npm run backup    # copia consistente y verificada → data/backups/asistencia-<ISO>.db (conserva las últimas 14)
 npm run restore -- data/backups/<archivo>.db
 ```
 
