@@ -1,6 +1,6 @@
 // Carga datos de DEMOSTRACIÓN en una instancia local de Reloj CR: marca del cliente
 // (con logo opcional), horarios, una semana de marcaciones, una corrección y alertas.
-// Uso: BASE=http://localhost:3200 ADMIN_PASSWORD=... [LOGO_FILE=/ruta/logo.svg] node scripts/demo-seed.mjs
+// Uso: BASE=http://localhost:3200 ADMIN_PASSWORD=... [LOGO_FILE=/ruta/logo.svg] [BRAND=none] node scripts/demo-seed.mjs
 // Solo para demos: los empleados son los ficticios del sistema; no cargue datos reales.
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -35,7 +35,8 @@ if (process.env.LOGO_FILE) {
   if (!mime) throw new Error("LOGO_FILE debe ser svg, png, jpg o webp");
   brand.brand_logo = `data:${mime};base64,${readFileSync(process.env.LOGO_FILE).toString("base64")}`;
 }
-await call("PATCH", "/api/v1/settings", brand, token);
+// BRAND=none deja la versión básica (para mostrar la demo a una empresa que no es ese cliente).
+if (process.env.BRAND !== "none") await call("PATCH", "/api/v1/settings", brand, token);
 
 const { employees } = await call("GET", "/api/v1/employees", null, token);
 const BOGOTA = "-05:00";
@@ -103,4 +104,4 @@ if (target) {
 // Escanea alertas de los últimos días para que el tablero tenga contenido.
 for (let back = 0; back <= 3; back += 1) await call("POST", `/api/v1/anomalies?day=${day(-back)}`, null, token);
 
-console.log(`Demo lista: ${created.length} marcaciones, ${employees.length} empleados, marca "${brand.brand_name}"${brand.brand_logo ? " con logo" : ""}.`);
+console.log(`Demo lista: ${created.length} marcaciones, ${employees.length} empleados, ${process.env.BRAND === "none" ? "versión básica" : `marca "${brand.brand_name}"${brand.brand_logo ? " con logo" : ""}`}.`);

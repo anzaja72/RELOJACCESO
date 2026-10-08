@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Levanta Reloj CR en local con datos de demostración y la marca del cliente.
 #   LOGO_FILE=~/Downloads/Burger_King_2020.svg ./scripts/demo.sh
+#   BRAND=none ./scripts/demo.sh        # versión básica, sin la marca de ningún cliente
 # Ctrl+C la detiene. Los datos viven en ./.demo-data (se borran con: rm -rf .demo-data).
 set -euo pipefail
 cd "$(dirname "$0")/.."
