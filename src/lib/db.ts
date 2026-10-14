@@ -18,6 +18,7 @@ import type {
 
 import { openJson, sealJson } from "@/lib/crypto-box";
 import { adminPassword, supervisorPin } from "@/lib/secrets";
+import { PRESETS } from "@/lib/brand";
 import { GENESIS_HASH, chainHash } from "@/lib/integrity";
 import { hashPassword } from "@/lib/session";
 
@@ -201,6 +202,15 @@ function seed(db: Database.Database) {
     sites: sites.length,
     employees: employees.length,
   });
+
+  // Instalación nueva: arranca con la marca de Burger King Colombia (el logo se sube aparte).
+  // Solo aquí: una base existente conserva la marca que ya tenga, o la versión básica.
+  const bk = PRESETS["Burger King Colombia"];
+  const brand = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+  brand.run("brand_name", bk.name);
+  brand.run("brand_primary", bk.primary);
+  brand.run("brand_dark", bk.dark);
+  brand.run("brand_light", bk.light);
 }
 
 function hasColumn(db: Database.Database, table: string, name: string) {

@@ -36,7 +36,9 @@ if (process.env.LOGO_FILE) {
   brand.brand_logo = `data:${mime};base64,${readFileSync(process.env.LOGO_FILE).toString("base64")}`;
 }
 // BRAND=none deja la versión básica (para mostrar la demo a una empresa que no es ese cliente).
-if (process.env.BRAND !== "none") await call("PATCH", "/api/v1/settings", brand, token);
+// Una instalación nueva ya arranca con la marca de Burger King; "none" la deja en versión básica.
+const cleared = { brand_name: "", brand_primary: "", brand_dark: "", brand_light: "", brand_logo: "" };
+await call("PATCH", "/api/v1/settings", process.env.BRAND === "none" ? cleared : brand, token);
 
 const { employees } = await call("GET", "/api/v1/employees", null, token);
 const BOGOTA = "-05:00";
