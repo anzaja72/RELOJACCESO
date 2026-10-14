@@ -28,6 +28,7 @@ const dbFile =
 const globalForDb = globalThis as unknown as {
   __bioDb?: Database.Database;
   __bioV3?: boolean;
+  __bioV4?: boolean;
 };
 
 function createDb() {
@@ -38,14 +39,16 @@ function createDb() {
   seed(db);
   migrateV2(db);
   migrateV3(db);
+  migrateV4(db);
   return db;
 }
 
 export function getDb() {
   if (!globalForDb.__bioDb) {
     globalForDb.__bioDb = createDb();
-  } else if (!globalForDb.__bioV3) {
+  } else if (!globalForDb.__bioV3 || !globalForDb.__bioV4) {
     migrateV3(globalForDb.__bioDb);
+    migrateV4(globalForDb.__bioDb);
     globalForDb.__bioV3 = true;
   }
   return globalForDb.__bioDb;
@@ -402,6 +405,50 @@ function migrateV3(db: Database.Database) {
     db.exec("ALTER TABLE terminals ADD COLUMN revoked_at TEXT");
   }
   globalForDb.__bioV3 = true;
+}
+
+function migrateV4(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shifts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      start_hm TEXT NOT NULL,
+      end_hm TEXT NOT NULL,
+      break_min INTEGER NOT NULL DEFAULT 60
+    );
+    CREATE TABLE IF NOT EXISTS contracts (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT UNIQUE NOT NULL,
+      monthly_salary REAL NOT NULL,
+      weekly_hours REAL NOT NULL DEFAULT 48,
+      currency TEXT NOT NULL DEFAULT 'COP'
+    );
+  `);
+  if (!hasColumn(db, "schedules", "shift_id")) {
+    db.exec("ALTER TABLE schedules ADD COLUMN shift_id TEXT");
+  }
+  const set = db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)");
+  set.run("ot_day_multiplier", "1.25");
+  set.run("ot_night_multiplier", "1.75");
+  set.run("ot_holiday_multiplier", "2.0");
+  set.run("night_start_hm", "19:00");
+  set.run("night_end_hm", "06:00");
+  set.run("holidays", "[]");
+  set.run("correction_window_hours", "48");
+  set.run("unjustified_absence_alert", "3");
+  set.run("max_weekly_hours", "48");
+  set.run("monthly_report_endpoint", "");
+  set.run("monthly_report_enabled", "0");
+  set.run("monthly_report_last_sent", "");
+  const shifts = db.prepare("SELECT COUNT(*) as n FROM shifts").get() as { n: number };
+  if (shifts.n === 0) {
+    const ins = db.prepare("INSERT INTO shifts (id,name,start_hm,end_hm,break_min) VALUES (?,?,?,?,?)");
+    ins.run("shift_std", "Jornada estándar 07:00–16:00", "07:00", "16:00", 60);
+    ins.run("shift_aman", "Mañana 06:00–14:00", "06:00", "14:00", 60);
+    ins.run("shift_tarde", "Tarde 14:00–22:00", "14:00", "22:00", 60);
+    ins.run("shift_noche", "Noche 22:00–06:00", "22:00", "06:00", 60);
+  }
+  globalForDb.__bioV4 = true;
 }
 
 export function recordEvent(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,15 @@ const HINTS = [
   "¿Falló alguna sincronización?",
 ];
 
+type Country = { id: string; name: string; code: string };
+type Zone = { id: string; name: string; country_id: string };
+
 export default function AiPage() {
   const [sites, setSites] = useState<Site[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [countryId, setCountryId] = useState("");
+  const [zoneId, setZoneId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [question, setQuestion] = useState(HINTS[0]);
   const [log, setLog] = useState<Array<{ q: string; a: string; cites: string; source: string }>>([]);
@@ -26,17 +33,40 @@ export default function AiPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void api.sites().then((r) => {
-      setSites(r.sites);
-      if (r.sites[0]) setSiteId(r.sites[0].id);
+    void api.catalog().then((cat) => {
+      setSites(cat.sites);
+      setCountries((cat.countries as Country[]) || []);
+      setZones((cat.zones as Zone[]) || []);
     });
   }, []);
+
+  const visibleZones = useMemo(
+    () => zones.filter((z) => !countryId || z.country_id === countryId),
+    [zones, countryId],
+  );
+  const visibleSites = useMemo(
+    () =>
+      sites.filter((s) => {
+        if (countryId && s.countryId !== countryId) return false;
+        if (zoneId && s.zoneId !== zoneId) return false;
+        return true;
+      }),
+    [sites, countryId, zoneId],
+  );
+
+  function region() {
+    return {
+      siteId: siteId || undefined,
+      countryId: countryId || undefined,
+      zoneId: zoneId || undefined,
+    };
+  }
 
   async function ask(q = question) {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.chat({ question: q, siteId: siteId || undefined });
+      const res = await api.chat({ question: q, ...region() });
       setLog((prev) => [
         {
           q,
@@ -56,7 +86,7 @@ export default function AiPage() {
   async function brief() {
     setBusy(true);
     try {
-      const res = await api.briefing(undefined, siteId || undefined);
+      const res = await api.briefing(undefined, siteId || undefined, countryId || undefined, zoneId || undefined);
       setBriefing(res.briefing.bullets);
       setBriefMeta(`${res.briefing.source} · ${res.llm.provider}`);
     } catch (err) {
@@ -68,15 +98,41 @@ export default function AiPage() {
 
   return (
     <AppShell
-      title="Pregunta a Reloj CR"
-      meta="Solo presentes, atrasos, ausencias, terminales, sync y correcciones. Sin consejo de sanción."
+      title="IAnálisis"
+      meta="Consulta acotada e informe regional: presentes, atrasos, ausencias, terminales, sync y correcciones. Sin consejo de sanción."
       actions={
         <>
+          <select
+            className="native-select"
+            value={countryId}
+            onChange={(e) => {
+              setCountryId(e.target.value);
+              setZoneId("");
+              setSiteId("");
+            }}
+          >
+            <option value="">País</option>
+            {countries.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            className="native-select"
+            value={zoneId}
+            onChange={(e) => {
+              setZoneId(e.target.value);
+              setSiteId("");
+            }}
+          >
+            <option value="">Zona</option>
+            {visibleZones.map((z) => (
+              <option key={z.id} value={z.id}>{z.name}</option>
+            ))}
+          </select>
           <select className="native-select" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} · {s.name}
-              </option>
+            <option value="">Sede</option>
+            {visibleSites.map((s) => (
+              <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
             ))}
           </select>
           <Button className="shade" disabled={busy} onClick={() => void brief()}>
@@ -91,6 +147,7 @@ export default function AiPage() {
           <h2>Consulta acotada</h2>
           <p className="muted">
             Sin clave LLM usa mapeos fijos. Con OPENAI_API_KEY o ANTHROPIC_API_KEY redacta sobre los mismos hechos.
+            Filtre por país, zona o sede para informes regionales.
           </p>
           <div className="form" style={{ marginTop: 12 }}>
             <Input value={question} onChange={(e) => setQuestion(e.target.value)} />

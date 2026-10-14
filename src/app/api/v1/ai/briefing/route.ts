@@ -20,6 +20,8 @@ export async function POST(request: Request) {
     const briefing = await generateBriefing({
       day: url.searchParams.get("day") ?? undefined,
       siteId: url.searchParams.get("site") ?? undefined,
+      countryId: url.searchParams.get("country") ?? undefined,
+      zoneId: url.searchParams.get("zone") ?? undefined,
     });
     recordEvent(getDb(), "ai.briefing", {
       actor: actor.email,

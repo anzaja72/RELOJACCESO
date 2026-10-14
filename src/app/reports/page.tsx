@@ -2,6 +2,18 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +31,54 @@ type Row = {
 type Country = { id: string; name: string; code: string };
 type Zone = { id: string; name: string; country_id: string };
 
+type Punct = {
+  employee?: { id: string; name: string; code: string; siteId: string };
+  siteId?: string;
+  name?: string;
+  presentDays: number;
+  lateDays: number;
+  avgLateMin: number;
+} | null;
+
+type Dash = {
+  month: string;
+  days: number;
+  totals: { present: number; absent: number; late: number; earlyOut: number; omission: number };
+  series: Array<{ day: string; present: number; absent: number; late: number; earlyOut: number; omission: number }>;
+  kpis: { mostPunctual: Punct; leastPunctual: Punct; mostPunctualSite: Punct };
+  payroll: Array<{
+    employeeId: string;
+    name: string;
+    code: string;
+    siteName: string;
+    hasContract: boolean;
+    currency: string;
+    workedHours: number;
+    ordinaryHours: number;
+    extraDayHours: number;
+    extraNightHours: number;
+    extraHolidayHours: number;
+    hourlyRate: number;
+    ordinaryValue: number;
+    extraDayValue: number;
+    extraNightValue: number;
+    extraHolidayValue: number;
+    totalValue: number;
+  }>;
+  params: {
+    maxWeeklyHours: number;
+    absenceThreshold: number;
+    correctionWindowHours: number;
+    multipliers: { day: number; night: number; holiday: number };
+  };
+};
+
+const DONUT_COLORS = ["#171717", "#e11d48", "#a3a3a3", "#f59e0b", "#7c3aed"];
+
+function num(n: number, digits = 0) {
+  return n.toLocaleString(LOCALE, { maximumFractionDigits: digits });
+}
+
 function ReportsPage() {
   const search = useSearchParams();
   const router = useRouter();
@@ -35,8 +95,12 @@ function ReportsPage() {
       new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date()),
   );
   const [status, setStatus] = useState(search.get("status") || "");
+  const [month, setMonth] = useState(
+    search.get("month") || new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date()).slice(0, 7),
+  );
   const [rows, setRows] = useState<Row[]>([]);
   const [totals, setTotals] = useState<Record<string, number>>({});
+  const [dash, setDash] = useState<Dash | null>(null);
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
@@ -61,11 +125,22 @@ function ReportsPage() {
 
   function pushQuery(next: Record<string, string>) {
     const qs = new URLSearchParams();
-    const merged = { country: countryId, zone: zoneId, site: siteId, employee: employeeId, day, status, ...next };
+    const merged = { country: countryId, zone: zoneId, site: siteId, employee: employeeId, day, status, month, ...next };
     for (const [k, v] of Object.entries(merged)) {
       if (v) qs.set(k, v);
     }
     router.replace(`/reports?${qs.toString()}`);
+  }
+
+  function filterQs(withDay: boolean) {
+    const qs = new URLSearchParams();
+    if (countryId) qs.set("country", countryId);
+    if (zoneId) qs.set("zone", zoneId);
+    if (siteId) qs.set("site", siteId);
+    if (employeeId) qs.set("employee", employeeId);
+    if (withDay && day) qs.set("day", day);
+    if (withDay && status) qs.set("status", status);
+    return qs;
   }
 
   async function load() {
@@ -76,14 +151,7 @@ function ReportsPage() {
       setZones((cat.zones as Zone[]) || []);
       const people = await api.employees(siteId || undefined);
       setEmployees(people.employees);
-      const qs = new URLSearchParams();
-      if (countryId) qs.set("country", countryId);
-      if (zoneId) qs.set("zone", zoneId);
-      if (siteId) qs.set("site", siteId);
-      if (employeeId) qs.set("employee", employeeId);
-      if (day) qs.set("day", day);
-      if (status) qs.set("status", status);
-      const report = (await api.reports(qs.toString())) as {
+      const report = (await api.reports(filterQs(true).toString())) as {
         rows: Row[];
         totals: Record<string, number>;
         terminals: Terminal[];
@@ -98,10 +166,27 @@ function ReportsPage() {
     }
   }
 
+  async function loadDash() {
+    try {
+      const qs = filterQs(false);
+      qs.set("month", month);
+      const d = (await api.dashboard(qs.toString())) as Dash;
+      setDash(d);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar el panel");
+    }
+  }
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countryId, zoneId, siteId, employeeId, day, status]);
+
+  useEffect(() => {
+    void loadDash();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryId, zoneId, siteId, employeeId, month]);
 
   async function download(format: string) {
     const headers = authHeaders();
@@ -178,6 +263,12 @@ function ReportsPage() {
             ))}
           </select>
           <Input type="date" value={day} onChange={(e) => { setDay(e.target.value); pushQuery({ day: e.target.value }); }} />
+          <Input
+            type="month"
+            value={month}
+            title="Mes del panel"
+            onChange={(e) => { setMonth(e.target.value); pushQuery({ month: e.target.value }); }}
+          />
           <select className="native-select" value={status} onChange={(e) => { setStatus(e.target.value); pushQuery({ status: e.target.value }); }}>
             <option value="">Estado</option>
             <option value="present">Presente</option>
@@ -205,6 +296,151 @@ function ReportsPage() {
               </li>
             ))}
           </ol>
+        </div>
+      )}
+      {dash && (
+        <div className="detail" style={{ borderBottom: "1px solid #f0f0f0", paddingBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+            <h2>Panel {dash.month}</h2>
+            <span className="muted">
+              {dash.days} días · extras ×{dash.params.multipliers.day} diurna, ×{dash.params.multipliers.night} nocturna, ×
+              {dash.params.multipliers.holiday} festiva · máx. {dash.params.maxWeeklyHours} h/semana
+            </span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 14 }}>
+            {[
+              ["Presentes", dash.totals.present, "#171717"],
+              ["Ausentes", dash.totals.absent, "#737373"],
+              ["Tardes", dash.totals.late, "#e11d48"],
+              ["Omisiones", dash.totals.omission, "#7c3aed"],
+            ].map(([label, value, color]) => (
+              <div key={String(label)} style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", color: String(color) }}>{num(Number(value))}</div>
+                <div style={{ fontSize: 11, color: "#8a8a8a", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+            {[
+              ["Trabajador más puntual", dash.kpis.mostPunctual ? dash.kpis.mostPunctual.employee?.name : null,
+                dash.kpis.mostPunctual ? `${num(dash.kpis.mostPunctual.avgLateMin, 1)} min de atraso promedio` : "—", "#15803d"],
+              ["Sede más puntual", dash.kpis.mostPunctualSite ? dash.kpis.mostPunctualSite.name : null,
+                dash.kpis.mostPunctualSite ? `${num(dash.kpis.mostPunctualSite.avgLateMin, 1)} min de atraso promedio` : "—", "#15803d"],
+              ["Trabajador menos puntual", dash.kpis.leastPunctual ? dash.kpis.leastPunctual.employee?.name : null,
+                dash.kpis.leastPunctual ? `${num(dash.kpis.leastPunctual.avgLateMin, 1)} min de atraso promedio` : "—", "#b91c1c"],
+            ].map(([label, name, sub, color]) => (
+              <div key={String(label)} style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {name ?? "—"}
+                </div>
+                <div style={{ fontSize: 11, color: String(color), marginTop: 3 }}>{sub}</div>
+                <div style={{ fontSize: 10.5, color: "#a3a3a3", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 6 }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 20 }}>
+            <div>
+              <h2 style={{ fontSize: 13, marginBottom: 8 }}>Estados del mes</h2>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: "Puntuales", value: Math.max(0, dash.totals.present - dash.totals.late) },
+                      { name: "Tardes", value: dash.totals.late },
+                      { name: "Ausentes", value: dash.totals.absent },
+                      { name: "Salida temprana", value: dash.totals.earlyOut },
+                      { name: "Omisiones", value: dash.totals.omission },
+                    ]}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={48}
+                    outerRadius={82}
+                    paddingAngle={2}
+                    label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                  >
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <Cell key={i} fill={DONUT_COLORS[i]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div>
+              <h2 style={{ fontSize: 13, marginBottom: 8 }}>Diario (puntuales / ausentes / tardes)</h2>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={dash.series.map((s) => ({ ...s, dd: s.day.slice(8), onTime: Math.max(0, s.present - s.late) }))}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="dd" tick={{ fontSize: 10 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
+                  <Tooltip />
+                  <Bar dataKey="onTime" name="Puntuales" stackId="a" fill="#171717" />
+                  <Bar dataKey="late" name="Tardes" stackId="a" fill="#e11d48" />
+                  <Bar dataKey="absent" name="Ausentes" stackId="a" fill="#d4d4d4" />
+                  <Bar dataKey="omission" name="Omisiones" stackId="a" fill="#7c3aed" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <h2 style={{ fontSize: 13, margin: "20px 0 8px" }}>
+            Horas y valores del mes · {dash.params.correctionWindowHours} h de plazo para correcciones · umbral de{" "}
+            {dash.params.absenceThreshold} faltas
+          </h2>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "#8a8a8a", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <th style={{ padding: "6px 8px" }}>Colaborador</th>
+                  <th style={{ padding: "6px 8px" }}>Sede</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Trabajadas</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Ordinarias</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra diurna</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra noct.</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra fest.</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Valor hora</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Valor extras</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dash.payroll.map((p) => (
+                  <tr key={p.employeeId} style={{ borderTop: "1px solid #f0f0f0" }}>
+                    <td style={{ padding: "7px 8px", fontWeight: 600 }}>
+                      {p.name}
+                      {!p.hasContract && <span className="pill warn" style={{ marginLeft: 6 }}>sin contrato</span>}
+                    </td>
+                    <td style={{ padding: "7px 8px", color: "#8a8a8a" }}>{p.siteName}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.workedHours, 1)} h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.ordinaryHours, 1)} h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraDayHours, 1)} h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraNightHours, 1)} h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraHolidayHours, 1)} h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
+                      {p.hasContract ? `$${num(p.hourlyRate)} ${p.currency}` : "—"}
+                    </td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
+                      {p.hasContract ? `$${num(p.extraDayValue + p.extraNightValue + p.extraHolidayValue)} ${p.currency}` : "—"}
+                    </td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>
+                      {p.hasContract ? `$${num(p.totalValue)} ${p.currency}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {dash.payroll.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="empty" style={{ textAlign: "center" }}>
+                      Sin colaboradores en el filtro.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       <div className="split">

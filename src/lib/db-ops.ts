@@ -1,10 +1,12 @@
 import { ulid } from "ulidx";
 import { classifyEmployee, type Exception, type Schedule } from "@/lib/attendance-rules";
 import { getDb, listEmployees, listPunches, listSites, listTerminals, recordEvent } from "@/lib/db";
+import { daysOfMonth, hmToMin, summarizeMonth, type DaySchedule, type PayCfg } from "@/lib/payroll";
 import { supervisorPin } from "@/lib/secrets";
 import { hashPassword, verifyPassword, type Role, type SessionUser } from "@/lib/session";
 import type { Employee, Punch } from "@/lib/types";
 import { TIMEZONE, dayBoundsUtc, localNoon } from "@/lib/config";
+import { postSigned } from "@/lib/webhook";
 
 export type UserRow = {
   id: string;
@@ -186,6 +188,8 @@ export function listEnrollmentAudit(employeeId?: string) {
   return db.prepare("SELECT * FROM enrollment_audit ORDER BY created_at DESC LIMIT 200").all();
 }
 
+export class CorrectionWindowError extends Error {}
+
 export function insertCorrection(input: {
   punchId: string;
   reason: string;
@@ -193,12 +197,22 @@ export function insertCorrection(input: {
   approvedBy: string;
   newTs?: string | null;
   newType?: string | null;
+  force?: boolean;
 }) {
   const db = getDb();
   const punch = db.prepare("SELECT * FROM punches WHERE id = ?").get(input.punchId) as
     | Record<string, unknown>
     | undefined;
   if (!punch) return null;
+  const win = Number(getSetting("correction_window_hours") || "0");
+  if (win > 0 && !input.force) {
+    const ageMs = Date.now() - new Date(String(punch.captured_at)).getTime();
+    if (ageMs > win * 3_600_000) {
+      throw new CorrectionWindowError(
+        `Plazo de corrección vencido: la marcación tiene más de ${win} h. Solo superadmin puede forzar.`,
+      );
+    }
+  }
   const previous = {
     ts: punch.captured_at,
     type: punch.type,
@@ -251,28 +265,111 @@ export function listSchedules(employeeId?: string) {
   return db.prepare("SELECT * FROM schedules ORDER BY employee_id, weekday").all();
 }
 
-export function upsertSchedule(input: {
-  employeeId: string;
-  weekday: number;
+export function listShifts() {
+  return getDb().prepare("SELECT * FROM shifts ORDER BY start_hm").all();
+}
+
+export function upsertShift(input: {
+  id?: string;
+  name: string;
   startHm: string;
   endHm: string;
-  lateGraceMin?: number;
+  breakMin?: number;
 }) {
-  const existing = getDb()
-    .prepare("SELECT id FROM schedules WHERE employee_id = ? AND weekday = ?")
-    .get(input.employeeId, input.weekday) as { id: string } | undefined;
+  const db = getDb();
+  if (input.id) {
+    const r = db
+      .prepare("UPDATE shifts SET name = ?, start_hm = ?, end_hm = ?, break_min = ? WHERE id = ?")
+      .run(input.name, input.startHm, input.endHm, input.breakMin ?? 60, input.id);
+    if (r.changes === 0) {
+      db.prepare("INSERT INTO shifts (id, name, start_hm, end_hm, break_min) VALUES (?,?,?,?,?)").run(
+        input.id,
+        input.name,
+        input.startHm,
+        input.endHm,
+        input.breakMin ?? 60,
+      );
+    }
+    return input.id;
+  }
+  const id = ulid();
+  db.prepare("INSERT INTO shifts (id, name, start_hm, end_hm, break_min) VALUES (?,?,?,?,?)").run(
+    id,
+    input.name,
+    input.startHm,
+    input.endHm,
+    input.breakMin ?? 60,
+  );
+  return id;
+}
+
+export function listContracts(employeeId?: string) {
+  const db = getDb();
+  const sql = `SELECT c.*, e.name AS employee_name, e.code AS employee_code, e.site_id
+    FROM contracts c JOIN employees e ON e.id = c.employee_id
+    ${employeeId ? "WHERE c.employee_id = ?" : ""} ORDER BY e.name`;
+  return employeeId ? db.prepare(sql).all(employeeId) : db.prepare(sql).all();
+}
+
+export function upsertContract(input: {
+  employeeId: string;
+  monthlySalary: number;
+  weeklyHours: number;
+  currency?: string;
+}) {
+  const db = getDb();
+  const existing = db.prepare("SELECT id FROM contracts WHERE employee_id = ?").get(input.employeeId) as
+    | { id: string }
+    | undefined;
   if (existing) {
-    getDb()
-      .prepare("UPDATE schedules SET start_hm = ?, end_hm = ?, late_grace_min = ? WHERE id = ?")
-      .run(input.startHm, input.endHm, input.lateGraceMin ?? 10, existing.id);
+    db.prepare("UPDATE contracts SET monthly_salary = ?, weekly_hours = ?, currency = ? WHERE id = ?").run(
+      input.monthlySalary,
+      input.weeklyHours,
+      input.currency ?? "COP",
+      existing.id,
+    );
     return existing.id;
   }
   const id = ulid();
-  getDb()
-    .prepare(
-      "INSERT INTO schedules (id, employee_id, weekday, start_hm, end_hm, late_grace_min) VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .run(id, input.employeeId, input.weekday, input.startHm, input.endHm, input.lateGraceMin ?? 10);
+  db.prepare(
+    "INSERT INTO contracts (id, employee_id, monthly_salary, weekly_hours, currency) VALUES (?,?,?,?,?)",
+  ).run(id, input.employeeId, input.monthlySalary, input.weeklyHours, input.currency ?? "COP");
+  return id;
+}
+
+export function upsertSchedule(input: {
+  employeeId: string;
+  weekday: number;
+  startHm?: string;
+  endHm?: string;
+  lateGraceMin?: number;
+  shiftId?: string;
+}) {
+  let startHm = input.startHm;
+  let endHm = input.endHm;
+  if (input.shiftId) {
+    const shift = getDb().prepare("SELECT * FROM shifts WHERE id = ?").get(input.shiftId) as
+      | Record<string, unknown>
+      | undefined;
+    if (!shift) throw new Error("Turno no encontrado");
+    startHm = String(shift.start_hm);
+    endHm = String(shift.end_hm);
+  }
+  if (!startHm || !endHm) throw new Error("startHm y endHm son obligatorios (o un shiftId)");
+  const db = getDb();
+  const existing = db
+    .prepare("SELECT id FROM schedules WHERE employee_id = ? AND weekday = ?")
+    .get(input.employeeId, input.weekday) as { id: string } | undefined;
+  if (existing) {
+    db.prepare(
+      "UPDATE schedules SET start_hm = ?, end_hm = ?, late_grace_min = ?, shift_id = ? WHERE id = ?",
+    ).run(startHm, endHm, input.lateGraceMin ?? 10, input.shiftId ?? null, existing.id);
+    return existing.id;
+  }
+  const id = ulid();
+  db.prepare(
+    "INSERT INTO schedules (id, employee_id, weekday, start_hm, end_hm, late_grace_min, shift_id) VALUES (?,?,?,?,?,?,?)",
+  ).run(id, input.employeeId, input.weekday, startHm, endHm, input.lateGraceMin ?? 10, input.shiftId ?? null);
   return id;
 }
 
@@ -368,6 +465,35 @@ export function todayLocal() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date());
 }
 
+/** Sedes de una región (país/zona) o null si no hay filtro — para filtrar punches/terminales/anomalías. */
+export function siteIdsForRegion(countryId?: string, zoneId?: string): Set<string> | null {
+  if (!countryId && !zoneId) return null;
+  const sites = listSites().filter(
+    (s) => (!countryId || s.countryId === countryId) && (!zoneId || s.zoneId === zoneId),
+  );
+  return new Set(sites.map((s) => s.id));
+}
+
+function employeesForFilters(input: {
+  siteId?: string;
+  employeeId?: string;
+  countryId?: string;
+  zoneId?: string;
+  scope?: Scope;
+}): Employee[] {
+  const siteById = new Map(listSites().map((s) => [s.id, s]));
+  let employees = (input.scope ? listEmployeesScoped(input.scope) : listEmployees(input.siteId)).filter(
+    (e) => !input.employeeId || e.id === input.employeeId,
+  );
+  if (input.countryId) {
+    employees = employees.filter((e) => siteById.get(e.siteId)?.countryId === input.countryId);
+  }
+  if (input.zoneId) {
+    employees = employees.filter((e) => siteById.get(e.siteId)?.zoneId === input.zoneId);
+  }
+  return employees;
+}
+
 export function reportForDay(input: {
   day?: string;
   siteId?: string;
@@ -381,15 +507,7 @@ export function reportForDay(input: {
   const { from, to } = dayBoundsUtc(day);
   const sites = listSites();
   const siteById = new Map(sites.map((s) => [s.id, s]));
-  let employees = (input.scope ? listEmployeesScoped(input.scope) : listEmployees(input.siteId)).filter(
-    (e) => !input.employeeId || e.id === input.employeeId,
-  );
-  if (input.countryId) {
-    employees = employees.filter((e) => siteById.get(e.siteId)?.countryId === input.countryId);
-  }
-  if (input.zoneId) {
-    employees = employees.filter((e) => siteById.get(e.siteId)?.zoneId === input.zoneId);
-  }
+  const employees = employeesForFilters(input);
   const punches = listPunches({
     siteId: input.siteId,
     from,
@@ -450,6 +568,264 @@ export function reportForDay(input: {
       status: input.status ?? null,
     },
   };
+}
+
+function payrollCfg(): PayCfg {
+  const num = (k: string, d: number) => {
+    const n = Number(getSetting(k));
+    return Number.isFinite(n) && n > 0 ? n : d;
+  };
+  const hm = (k: string, d: string) => {
+    const n = hmToMin(getSetting(k) || d);
+    return Number.isFinite(n) ? n : hmToMin(d);
+  };
+  let holidays: string[] = [];
+  try {
+    holidays = JSON.parse(getSetting("holidays") || "[]");
+  } catch {
+    holidays = [];
+  }
+  return {
+    holidays,
+    nightStartMin: hm("night_start_hm", "19:00"),
+    nightEndMin: hm("night_end_hm", "06:00"),
+    multDay: num("ot_day_multiplier", 1.25),
+    multNight: num("ot_night_multiplier", 1.75),
+    multHoliday: num("ot_holiday_multiplier", 2.0),
+  };
+}
+
+function punchesBetween(from: string, to: string): Punch[] {
+  const out: Punch[] = [];
+  let afterId: string | undefined;
+  for (;;) {
+    const batch = listPunches({ from, to, afterId, limit: 5000, order: "asc" });
+    out.push(...batch);
+    if (batch.length < 5000) break;
+    afterId = batch.at(-1)?.id;
+    if (!afterId) break;
+  }
+  return out;
+}
+
+type Punctual = {
+  employee: { id: string; name: string; code: string; siteId: string };
+  presentDays: number;
+  lateDays: number;
+  lateMin: number;
+  avgLateMin: number;
+  unjustified: number;
+};
+
+/** Dashboard mensual: serie diaria, KPIs de puntualidad y nómina de horas/valores. */
+export function reportDashboard(input: {
+  month?: string;
+  siteId?: string;
+  employeeId?: string;
+  countryId?: string;
+  zoneId?: string;
+  scope?: Scope;
+}) {
+  const month = (input.month || todayLocal().slice(0, 7)).slice(0, 7);
+  const days = daysOfMonth(month).filter((d) => d <= todayLocal());
+  const exceptions = listExceptions() as Array<Record<string, unknown>>;
+  const excSet = new Set(
+    exceptions
+      .filter((x) => x.type === "justified" || x.type === "off")
+      .map((x) => `${x.employee_id}|${x.date}`),
+  );
+
+  // Serie diaria + agregación por trabajador (reusa reportForDay; O(días×empleados)).
+  const series: Array<{ day: string; present: number; absent: number; late: number; earlyOut: number; omission: number }> = [];
+  const perEmp = new Map<string, Punctual>();
+  for (const day of days) {
+    const r = reportForDay({
+      day,
+      siteId: input.siteId,
+      employeeId: input.employeeId,
+      countryId: input.countryId,
+      zoneId: input.zoneId,
+      scope: input.scope,
+    });
+    series.push({ day, ...r.totals });
+    for (const row of r.rows) {
+      let rec = perEmp.get(row.employee.id);
+      if (!rec) {
+        rec = {
+          employee: {
+            id: row.employee.id,
+            name: row.employee.name,
+            code: row.employee.code,
+            siteId: row.employee.siteId,
+          },
+          presentDays: 0,
+          lateDays: 0,
+          lateMin: 0,
+          avgLateMin: 0,
+          unjustified: 0,
+        };
+        perEmp.set(row.employee.id, rec);
+      }
+      if (row.status === "present" || row.status === "on_time" || row.status === "late") {
+        rec.presentDays += 1;
+        if (row.status === "late") {
+          rec.lateDays += 1;
+          rec.lateMin += row.lateMin;
+        }
+      } else if (row.status === "absent") {
+        if (!excSet.has(`${row.employee.id}|${day}`)) rec.unjustified += 1;
+      }
+    }
+  }
+
+  const eligible = [...perEmp.values()].filter((r) => r.presentDays > 0);
+  for (const r of eligible) r.avgLateMin = Math.round((r.lateMin / r.presentDays) * 10) / 10;
+  const byPunct = [...eligible].sort(
+    (a, b) => a.avgLateMin - b.avgLateMin || a.lateDays - b.lateDays,
+  );
+  const siteAgg = new Map<string, { siteId: string; presentDays: number; lateMin: number; lateDays: number }>();
+  for (const r of eligible) {
+    const s = siteAgg.get(r.employee.siteId) ?? { siteId: r.employee.siteId, presentDays: 0, lateMin: 0, lateDays: 0 };
+    s.presentDays += r.presentDays;
+    s.lateMin += r.lateMin;
+    s.lateDays += r.lateDays;
+    siteAgg.set(r.employee.siteId, s);
+  }
+  const siteNames = new Map(listSites().map((s) => [s.id, s.name]));
+  const sitesByPunct = [...siteAgg.values()]
+    .map((s) => ({
+      ...s,
+      name: siteNames.get(s.siteId) ?? s.siteId,
+      avgLateMin: Math.round((s.lateMin / s.presentDays) * 10) / 10,
+    }))
+    .sort((a, b) => a.avgLateMin - b.avgLateMin || a.lateDays - b.lateDays);
+
+  // Nómina: horas y valores por trabajador.
+  const employees = employeesForFilters(input);
+  const [firstDay] = daysOfMonth(month);
+  const lastDay = daysOfMonth(month).at(-1) ?? firstDay;
+  const punches = punchesBetween(
+    new Date(new Date(dayBoundsUtc(firstDay).from).getTime() - 86_400_000).toISOString(),
+    dayBoundsUtc(lastDay).to,
+  );
+  const shifts = new Map(listShifts().map((s) => [String((s as Record<string, unknown>).id), s as Record<string, unknown>]));
+  const contracts = new Map(
+    listContracts().map((c) => [String((c as Record<string, unknown>).employee_id), c as Record<string, unknown>]),
+  );
+  const schedByEmp = new Map<string, Map<number, DaySchedule>>();
+  for (const s of listSchedules() as Array<Record<string, unknown>>) {
+    const shift = s.shift_id ? shifts.get(String(s.shift_id)) : undefined;
+    const entry: DaySchedule = {
+      startMin: hmToMin(String(s.start_hm)),
+      endMin: hmToMin(String(s.end_hm)),
+      breakMin: shift ? Number(shift.break_min ?? 0) : 0,
+    };
+    const m = schedByEmp.get(String(s.employee_id)) ?? new Map();
+    m.set(Number(s.weekday), entry);
+    schedByEmp.set(String(s.employee_id), m);
+  }
+  const cfg = payrollCfg();
+  const payroll = employees.map((e) => {
+    const contract = contracts.get(e.id);
+    const empSched = schedByEmp.get(e.id);
+    const summary = summarizeMonth({
+      month,
+      punches: punches.filter((p) => p.employeeId === e.id),
+      scheduleFor: (day) => empSched?.get(new Date(localNoon(day)).getDay()) ?? null,
+      contract: contract
+        ? { monthlySalary: Number(contract.monthly_salary), weeklyHours: Number(contract.weekly_hours) }
+        : null,
+      cfg,
+    });
+    return {
+      employeeId: e.id,
+      name: e.name,
+      code: e.code,
+      siteId: e.siteId,
+      siteName: siteNames.get(e.siteId) ?? e.siteId,
+      hasContract: Boolean(contract),
+      currency: String(contract?.currency ?? "COP"),
+      ...summary,
+    };
+  });
+
+  // Alertas contractuales (dedupe: sin acuse previo del mismo tipo+empleado).
+  const maxWeekly = Number(getSetting("max_weekly_hours") || "0");
+  const absThreshold = Number(getSetting("unjustified_absence_alert") || "0");
+  const existing = listAlerts() as Array<{ type: string; employee_id: string | null; acked: number }>;
+  const hasAlert = (type: string, empId: string) =>
+    existing.some((a) => a.type === type && a.employee_id === empId && a.acked === 0);
+  if (maxWeekly > 0) {
+    for (const row of payroll) {
+      const over = Object.entries(row.weeklyHours).find(([, h]) => Number(h) > maxWeekly);
+      if (over && !hasAlert("hours.over_limit", row.employeeId)) {
+        insertAlert(
+          "hours.over_limit",
+          `${row.name}: ${Math.round(Number(over[1]))} h en la semana del ${over[0]} (máx. legal ${maxWeekly} h)`,
+          row.siteId,
+          row.employeeId,
+        );
+      }
+    }
+  }
+  if (absThreshold > 0) {
+    for (const rec of eligible) {
+      if (rec.unjustified >= absThreshold && !hasAlert("absence.unjustified", rec.employee.id)) {
+        insertAlert(
+          "absence.unjustified",
+          `${rec.employee.name}: ${rec.unjustified} faltas injustificadas en ${month} (umbral contractual ${absThreshold})`,
+          rec.employee.siteId,
+          rec.employee.id,
+        );
+      }
+    }
+  }
+
+  const totals = series.reduce(
+    (acc, s) => ({
+      present: acc.present + s.present,
+      absent: acc.absent + s.absent,
+      late: acc.late + s.late,
+      earlyOut: acc.earlyOut + s.earlyOut,
+      omission: acc.omission + s.omission,
+    }),
+    { present: 0, absent: 0, late: 0, earlyOut: 0, omission: 0 },
+  );
+  return {
+    month,
+    days: days.length,
+    totals,
+    series,
+    kpis: {
+      mostPunctual: byPunct[0] ?? null,
+      leastPunctual: byPunct.at(-1) ?? null,
+      mostPunctualSite: sitesByPunct[0] ?? null,
+    },
+    payroll,
+    params: {
+      maxWeeklyHours: maxWeekly,
+      absenceThreshold: absThreshold,
+      correctionWindowHours: Number(getSetting("correction_window_hours") || "0"),
+      multipliers: { day: cfg.multDay, night: cfg.multNight, holiday: cfg.multHoliday },
+    },
+  };
+}
+
+export async function sendMonthlyReport(month?: string) {
+  const url = getSetting("monthly_report_endpoint");
+  if (!url) return { ok: false, error: "Sin endpoint configurado" };
+  const m = (month || todayLocal().slice(0, 7)).slice(0, 7);
+  try {
+    const payload = reportDashboard({ month: m });
+    const res = await postSigned(url, "report.monthly", payload);
+    if (res.ok) {
+      setSetting("monthly_report_last_sent", m);
+      recordEvent(getDb(), "report.monthly_sent", { month: m, status: res.status });
+    }
+    return { ok: res.ok, status: res.status, month: m };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Fallo de red", month: m };
+  }
 }
 
 export function ensureOfflineAlerts() {

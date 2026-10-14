@@ -20,7 +20,13 @@ export async function POST(request: Request) {
   const actor = requireActor(request);
   if (isResponse(actor)) return actor;
   try {
-    const body = await parseJson<{ question?: string; day?: string; siteId?: string }>(request);
+    const body = await parseJson<{
+      question?: string;
+      day?: string;
+      siteId?: string;
+      countryId?: string;
+      zoneId?: string;
+    }>(request);
     if (!body.question?.trim()) {
       return json({ error: "question es obligatorio", code: "VALIDATION" }, 400, request);
     }
@@ -28,6 +34,8 @@ export async function POST(request: Request) {
       question: body.question.trim(),
       day: body.day,
       siteId: body.siteId,
+      countryId: body.countryId,
+      zoneId: body.zoneId,
       scope: { role: actor.role, scopeType: actor.scopeType, scopeId: actor.scopeId },
     });
     recordEvent(getDb(), "ai.chat", {

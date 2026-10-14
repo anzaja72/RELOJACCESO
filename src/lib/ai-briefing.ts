@@ -1,7 +1,7 @@
 import { listAnomalies } from "@/lib/anomalies";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { getDb, listPunches } from "@/lib/db";
-import { listCorrections, reportForDay, todayLocal } from "@/lib/db-ops";
+import { listCorrections, reportForDay, siteIdsForRegion, todayLocal } from "@/lib/db-ops";
 import { dayBoundsUtc } from "@/lib/config";
 
 export type BriefingBullet = {
@@ -26,15 +26,18 @@ function qs(params: Record<string, string | null | undefined>) {
   return u.toString();
 }
 
-function templateBriefing(day: string, siteId: string | undefined): BriefingBullet[] {
-  const report = reportForDay({ day, siteId });
+type Region = { countryId?: string; zoneId?: string };
+
+function templateBriefing(day: string, siteId: string | undefined, region: Region = {}): BriefingBullet[] {
+  const report = reportForDay({ day, siteId, ...region });
+  const reg = siteIdsForRegion(region.countryId, region.zoneId);
   const punches = listPunches({
     siteId,
     ...dayBoundsUtc(day),
     limit: 500,
-  });
+  }).filter((p) => !reg || reg.has(p.siteId));
   const pins = punches.filter((p) => p.method === "supervisor_pin");
-  const anomalies = listAnomalies({ day, siteId });
+  const anomalies = listAnomalies({ day, siteId }).filter((a) => !reg || !a.siteId || reg.has(a.siteId));
   const late = report.rows.filter((r) => r.status === "late");
   const absent = report.rows.filter((r) => r.status === "absent");
   const corrections = (listCorrections() as Array<Record<string, unknown>>).filter((c) =>
@@ -42,6 +45,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
   );
   const offline = report.terminals.filter((t) => !t.online);
   const siteQ = siteId || "";
+  const regionQ = { country: region.countryId, zone: region.zoneId };
 
   const lateCite = late
     .slice(0, 3)
@@ -54,7 +58,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
   return [
     {
       text: `${day}: ${report.totals.present} presentes, ${report.totals.late} tardes, ${report.totals.absent} ausentes, ${report.totals.omission} omisiones (${report.rows.length} colaboradores en el filtro).`,
-      href: `/reports?${qs({ day, site: siteQ })}`,
+      href: `/reports?${qs({ day, site: siteQ, ...regionQ })}`,
       cites: punches.slice(0, 5).map((p) => ({ type: "punch" as const, id: p.id })),
     },
     {
@@ -65,7 +69,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
               .slice(0, 3)
               .map((r) => `${r.employee.name} (${r.employee.id}, +${r.lateMin} min)`)
               .join("; ")}${late.length > 3 ? "…" : ""}.`,
-      href: `/reports?${qs({ day, site: siteQ, status: "late" })}`,
+      href: `/reports?${qs({ day, site: siteQ, status: "late", ...regionQ })}`,
       cites: lateCite,
     },
     {
@@ -76,7 +80,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
               .slice(0, 4)
               .map((r) => `${r.employee.name} (${r.employee.id})`)
               .join("; ")}.`,
-      href: `/reports?${qs({ day, site: siteQ, status: "absent" })}`,
+      href: `/reports?${qs({ day, site: siteQ, status: "absent", ...regionQ })}`,
       cites: absent.slice(0, 4).map((r) => ({ type: "employee" as const, id: r.employee.id })),
     },
     {
@@ -89,7 +93,7 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
     },
     {
       text: `PIN supervisor: ${pins.length} · anomalías abiertas: ${anomalies.filter((a) => !a.reviewed).length} · correcciones del día: ${corrections.length}.`,
-      href: `/reports?${qs({ day, site: siteQ })}`,
+      href: `/reports?${qs({ day, site: siteQ, ...regionQ })}`,
       cites: [
         ...pins.slice(0, 3).map((p) => ({ type: "punch" as const, id: p.id })),
         ...anomalies.slice(0, 2).map((a) => ({ type: "anomaly" as const, id: a.id })),
@@ -98,16 +102,19 @@ function templateBriefing(day: string, siteId: string | undefined): BriefingBull
   ];
 }
 
-function factsPayload(day: string, siteId?: string) {
-  const report = reportForDay({ day, siteId });
+function factsPayload(day: string, siteId?: string, region: Region = {}) {
+  const report = reportForDay({ day, siteId, ...region });
+  const reg = siteIdsForRegion(region.countryId, region.zoneId);
   const punches = listPunches({
     siteId,
     ...dayBoundsUtc(day),
     limit: 200,
-  });
+  }).filter((p) => !reg || reg.has(p.siteId));
   return {
     day,
     siteId: siteId ?? null,
+    countryId: region.countryId ?? null,
+    zoneId: region.zoneId ?? null,
     totals: report.totals,
     rows: report.rows.map((r) => ({
       employeeId: r.employee.id,
@@ -123,26 +130,34 @@ function factsPayload(day: string, siteId?: string) {
       online: t.online,
     })),
     pinPunchIds: punches.filter((p) => p.method === "supervisor_pin").map((p) => p.id),
-    anomalies: listAnomalies({ day, siteId }).map((a) => ({
-      id: a.id,
-      kind: a.kind,
-      message: a.message,
-      punchIds: a.punchIds,
-      reviewed: a.reviewed,
-    })),
+    anomalies: listAnomalies({ day, siteId })
+      .filter((a) => !reg || !a.siteId || reg.has(a.siteId))
+      .map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        message: a.message,
+        punchIds: a.punchIds,
+        reviewed: a.reviewed,
+      })),
   };
 }
 
-export async function generateBriefing(input: { day?: string; siteId?: string }): Promise<Briefing> {
+export async function generateBriefing(input: {
+  day?: string;
+  siteId?: string;
+  countryId?: string;
+  zoneId?: string;
+}): Promise<Briefing> {
   const day = input.day || todayLocal();
   const siteId = input.siteId;
-  const fallback = templateBriefing(day, siteId);
+  const region: Region = { countryId: input.countryId, zoneId: input.zoneId };
+  const fallback = templateBriefing(day, siteId, region);
   const info = llmInfo();
   getDb();
   if (info.provider === "none") {
     return { day, siteId: siteId ?? null, source: "template", provider: "none", bullets: fallback };
   }
-  const facts = factsPayload(day, siteId);
+  const facts = factsPayload(day, siteId, region);
   const raw = await llmComplete(
     `Eres el briefing operativo de Reloj CR. Responde SOLO un JSON: {"bullets":[{"text":"...","href":"/reports?day=...","cites":[{"type":"punch|employee|terminal|anomaly","id":"..."}]}]} con EXACTAMENTE 5 bullets en español. Usa únicamente los hechos JSON del usuario. No inventes nombres, ids ni conteos. Cada bullet debe citar al menos un id real o un total del JSON. href debe ser una ruta interna /reports o /admin. No des consejos de sanción.`,
     JSON.stringify(facts),

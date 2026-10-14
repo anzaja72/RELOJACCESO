@@ -31,22 +31,29 @@ import {
   listAlerts,
   listCorrections,
   listCountries,
+  listContracts,
   listEmployeesScoped,
   listEnrollmentAudit,
   listExceptions,
   listSchedules,
   listSettings,
+  listShifts,
   listSitesScoped,
   listUsersPublic,
   listZones,
+  reportDashboard,
   reportForDay,
   retentionDays,
+  sendMonthlyReport,
   setSetting,
   setSupervisorPin,
   toSession,
+  upsertContract,
   upsertSchedule,
+  upsertShift,
   verifySupervisorPin,
   ackAlert,
+  CorrectionWindowError,
 } from "@/lib/db-ops";
 import {
   activateTerminal,
@@ -89,6 +96,20 @@ function actorOrThrow(request: Request) {
 
 function scopeOf(actor: Actor) {
   return { role: actor.role, scopeType: actor.scopeType, scopeId: actor.scopeId };
+}
+
+/** Dispara el informe mensual en la primera petición autenticada del mes (lazy, sin cron). */
+function maybeMonthlyReport() {
+  try {
+    if (getSetting("monthly_report_enabled") !== "1") return;
+    if (!getSetting("monthly_report_endpoint")) return;
+    const month = new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date()).slice(0, 7);
+    if (getSetting("monthly_report_last_sent") === month) return;
+    // ponytail: reintento en la siguiente petición del mes si falla el endpoint.
+    void sendMonthlyReport(month).catch(() => undefined);
+  } catch {
+    /* el informe mensual nunca debe tumbar la lectura */
+  }
 }
 
 async function handleGet(request: Request, parts: string[]) {
@@ -226,6 +247,7 @@ async function handleGet(request: Request, parts: string[]) {
   if (route === "reports") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
+    maybeMonthlyReport();
     const report = reportForDay({
       day: url.searchParams.get("day") ?? undefined,
       siteId: url.searchParams.get("site") ?? undefined,
@@ -236,6 +258,21 @@ async function handleGet(request: Request, parts: string[]) {
       scope: scopeOf(actor),
     });
     return json(report, 200, request);
+  }
+
+  if (route === "reports/dashboard") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    maybeMonthlyReport();
+    const dash = reportDashboard({
+      month: url.searchParams.get("month") ?? undefined,
+      siteId: url.searchParams.get("site") ?? undefined,
+      employeeId: url.searchParams.get("employee") ?? undefined,
+      countryId: url.searchParams.get("country") ?? undefined,
+      zoneId: url.searchParams.get("zone") ?? undefined,
+      scope: scopeOf(actor),
+    });
+    return json(dash, 200, request);
   }
 
   if (route === "exports/pack") {
@@ -317,6 +354,18 @@ async function handleGet(request: Request, parts: string[]) {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
     return json({ schedules: listSchedules(url.searchParams.get("employee") ?? undefined) }, 200, request);
+  }
+
+  if (route === "shifts") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    return json({ shifts: listShifts() }, 200, request);
+  }
+
+  if (route === "contracts") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    return json({ contracts: listContracts(url.searchParams.get("employee") ?? undefined) }, 200, request);
   }
 
   if (route === "exceptions") {
@@ -616,10 +665,14 @@ async function handlePost(request: Request, parts: string[]) {
         approvedBy: actor.email,
         newTs: body.newTs,
         newType: body.newType,
+        force: actor.role === "superadmin",
       });
       if (!row) return json({ error: "Marcación no encontrada", code: "NOT_FOUND" }, 404, request);
       return json({ correction: row }, 201, request);
     } catch (error) {
+      if (error instanceof CorrectionWindowError) {
+        return json({ error: error.message, code: "CORRECTION_WINDOW" }, 403, request);
+      }
       return serverError(error, request);
     }
   }
@@ -633,18 +686,72 @@ async function handlePost(request: Request, parts: string[]) {
       startHm?: string;
       endHm?: string;
       lateGraceMin?: number;
+      shiftId?: string;
     }>(request);
-    if (!body.employeeId || body.weekday == null || !body.startHm || !body.endHm) {
-      return badRequest("employeeId, weekday, startHm y endHm son obligatorios", { code: "VALIDATION" }, request);
+    if (!body.employeeId || body.weekday == null || (!body.shiftId && (!body.startHm || !body.endHm))) {
+      return badRequest(
+        "employeeId, weekday y (startHm+endHm o shiftId) son obligatorios",
+        { code: "VALIDATION" },
+        request,
+      );
     }
-    const id = upsertSchedule({
-      employeeId: body.employeeId,
-      weekday: body.weekday,
+    try {
+      const id = upsertSchedule({
+        employeeId: body.employeeId,
+        weekday: body.weekday,
+        startHm: body.startHm,
+        endHm: body.endHm,
+        lateGraceMin: body.lateGraceMin,
+        shiftId: body.shiftId,
+      });
+      return json({ id }, 201, request);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("Turno no encontrado")) {
+        return json({ error: err.message, code: "NOT_FOUND" }, 404, request);
+      }
+      throw err;
+    }
+  }
+
+  if (route === "shifts") {
+    const actor = requireWrite(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ id?: string; name?: string; startHm?: string; endHm?: string; breakMin?: number }>(request);
+    if (!body.name?.trim() || !body.startHm || !body.endHm) {
+      return badRequest("name, startHm y endHm son obligatorios", { code: "VALIDATION" }, request);
+    }
+    const id = upsertShift({
+      id: body.id,
+      name: body.name.trim(),
       startHm: body.startHm,
       endHm: body.endHm,
-      lateGraceMin: body.lateGraceMin,
+      breakMin: body.breakMin,
     });
     return json({ id }, 201, request);
+  }
+
+  if (route === "contracts") {
+    const actor = requireWrite(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ employeeId?: string; monthlySalary?: number; weeklyHours?: number; currency?: string }>(request);
+    if (!body.employeeId || !(body.monthlySalary != null) || body.monthlySalary < 0) {
+      return badRequest("employeeId y monthlySalary son obligatorios", { code: "VALIDATION" }, request);
+    }
+    const id = upsertContract({
+      employeeId: body.employeeId,
+      monthlySalary: Number(body.monthlySalary),
+      weeklyHours: Number(body.weeklyHours) || 48,
+      currency: body.currency,
+    });
+    return json({ id }, 201, request);
+  }
+
+  if (route === "reports/monthly-send") {
+    const actor = requireApprover(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ month?: string }>(request).catch(() => ({}) as { month?: string });
+    const result = await sendMonthlyReport(body.month);
+    return json(result, result.ok ? 200 : 502, request);
   }
 
   if (route === "exceptions") {
@@ -735,6 +842,17 @@ async function handlePatch(request: Request, parts: string[]) {
       "alert_late",
       "alert_terminal_offline",
       "alert_sync_failed",
+      "ot_day_multiplier",
+      "ot_night_multiplier",
+      "ot_holiday_multiplier",
+      "night_start_hm",
+      "night_end_hm",
+      "holidays",
+      "correction_window_hours",
+      "unjustified_absence_alert",
+      "max_weekly_hours",
+      "monthly_report_endpoint",
+      "monthly_report_enabled",
     ];
     for (const [key, value] of Object.entries(body)) {
       if (key === "supervisor_pin") {

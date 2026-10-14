@@ -1,7 +1,14 @@
 import { generateBriefing } from "@/lib/ai-briefing";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { listPunches } from "@/lib/db";
-import { listCorrections, listEmployeesScoped, reportForDay, todayLocal, type Scope } from "@/lib/db-ops";
+import {
+  listCorrections,
+  listEmployeesScoped,
+  reportForDay,
+  siteIdsForRegion,
+  todayLocal,
+  type Scope,
+} from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
 import { listTerminals } from "@/lib/db";
 import { dayBoundsUtc } from "@/lib/config";
@@ -33,13 +40,21 @@ function detectIntent(q: string): string {
   return "unknown";
 }
 
-function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
-  const report = reportForDay({ day, siteId, scope });
+function retrieve(
+  intent: string,
+  day: string,
+  siteId?: string,
+  scope?: Scope,
+  countryId?: string,
+  zoneId?: string,
+) {
+  const report = reportForDay({ day, siteId, scope, countryId, zoneId });
+  const reg = siteIdsForRegion(countryId, zoneId);
   const punches = listPunches({
     siteId,
     ...dayBoundsUtc(day),
     limit: 300,
-  });
+  }).filter((p) => !reg || reg.has(p.siteId));
   if (intent === "present") {
     const rows = report.rows.filter((r) => ["present", "on_time", "late"].includes(r.status));
     return {
@@ -89,7 +104,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
     return {
       label: "terminales",
       rows: listTerminals()
-        .filter((t) => !siteId || t.siteId === siteId)
+        .filter((t) => (!siteId || t.siteId === siteId) && (!reg || reg.has(t.siteId)))
         .map((t) => ({ id: t.id, label: t.label, online: t.online, lastSeen: t.lastSeen })),
     };
   }
@@ -116,13 +131,15 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   if (intent === "anomalies") {
     return {
       label: "anomalías",
-      rows: listAnomalies({ day, siteId }).map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        message: a.message,
-        punchIds: a.punchIds,
-        reviewed: a.reviewed,
-      })),
+      rows: listAnomalies({ day, siteId })
+        .filter((a) => !reg || !a.siteId || reg.has(a.siteId))
+        .map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          message: a.message,
+          punchIds: a.punchIds,
+          reviewed: a.reviewed,
+        })),
     };
   }
   return { label: intent, rows: [] as unknown[] };
@@ -169,6 +186,8 @@ export async function answerChat(input: {
   question: string;
   day?: string;
   siteId?: string;
+  countryId?: string;
+  zoneId?: string;
   scope?: Scope;
 }): Promise<ChatAnswer> {
   const day = input.day || todayLocal();
@@ -177,7 +196,12 @@ export async function answerChat(input: {
     return { answer: REFUSE, intent, cites: [], source: "canned", missing: false };
   }
   if (intent === "briefing") {
-    const briefing = await generateBriefing({ day, siteId: input.siteId });
+    const briefing = await generateBriefing({
+      day,
+      siteId: input.siteId,
+      countryId: input.countryId,
+      zoneId: input.zoneId,
+    });
     return {
       answer: briefing.bullets.map((b, i) => `${i + 1}. ${b.text} (${b.href})`).join("\n"),
       intent,
@@ -186,13 +210,20 @@ export async function answerChat(input: {
       missing: false,
     };
   }
-  const data = retrieve(intent, day, input.siteId, input.scope);
+  const data = retrieve(intent, day, input.siteId, input.scope, input.countryId, input.zoneId);
   const fallback = canned(intent, day, input.siteId, data);
   const info = llmInfo();
   if (info.provider === "none" || intent === "unknown") return fallback;
   const raw = await llmComplete(
-    `Eres "Pregunta a Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
-    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({ day, siteId: input.siteId ?? null, intent, data })}`,
+    `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
+    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
+      day,
+      siteId: input.siteId ?? null,
+      countryId: input.countryId ?? null,
+      zoneId: input.zoneId ?? null,
+      intent,
+      data,
+    })}`,
   );
   if (!raw) return fallback;
   return {
