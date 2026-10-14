@@ -36,7 +36,7 @@ export async function PATCH(
     if (body.siteId && !siteInScope(access.actor, body.siteId)) {
       return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403);
     }
-    const employee = patchEmployee(access.employee.id, body);
+    const employee = patchEmployee(access.employee.id, body, access.actor.email);
     return json({ employee: getEmployee(employee.id) ?? employee });
   } catch (error) {
     return serverError(error);

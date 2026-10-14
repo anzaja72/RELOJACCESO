@@ -33,28 +33,38 @@ import {
   listAlerts,
   listCorrections,
   listCountries,
+  listContracts,
   listEmployeesScoped,
   listEnrollmentAudit,
   listExceptions,
   listSchedules,
   listSettings,
+  listShifts,
   listSitesScoped,
   listUsersPublic,
   listZones,
+  reportDashboard,
   reportForDay,
   retentionDays,
+  sendMonthlyReport,
   setSetting,
   setSupervisorPin,
   siteIdsForScope,
   toSession,
   todayLocal,
+  upsertContract,
   upsertSchedule,
+  upsertShift,
   verifySupervisorPin,
   ackAlert,
+  CorrectionWindowError,
 } from "@/lib/db-ops";
 import {
   activateTerminal,
   createEmployee,
+  createSite,
+  createZone,
+  updateSite,
   employeePunchableAtSite,
   getDb,
   getEmployee,
@@ -73,6 +83,7 @@ import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http"
 import { isHex, isLogo, parseBrand } from "@/lib/brand";
 import { buildDossier } from "@/lib/dossier";
 import { allowedSiteIds, filterBySite, requireEmployeeAccess, requireReader, requireSuperadmin, siteInScope } from "@/lib/scope";
+import { settingsError } from "@/lib/settings-validation";
 import { toCsv, toSimplePdf, toXlsx, zipStore } from "@/lib/pack";
 import {
   canApprove,
@@ -99,8 +110,30 @@ function actorOrThrow(request: Request) {
   return requireActor(request);
 }
 
+/** Sueldos y valores: gerentes y auditor. El operador ve horas, no dinero. */
+const MONEY_FIELDS = ["hourlyRate", "ordinaryValue", "extraDayValue", "extraNightValue", "extraHolidayValue", "totalValue"];
+function redactMoney(row: Record<string, unknown>) {
+  const out: Record<string, unknown> = { ...row, hasContract: null };
+  for (const k of MONEY_FIELDS) out[k] = null;
+  return out;
+}
+
 function scopeOf(actor: Actor) {
   return { role: actor.role, scopeType: actor.scopeType, scopeId: actor.scopeId };
+}
+
+/** Dispara el informe mensual en la primera petición autenticada del mes (lazy, sin cron). */
+function maybeMonthlyReport() {
+  try {
+    if (getSetting("monthly_report_enabled") !== "1") return;
+    if (!getSetting("monthly_report_endpoint")) return;
+    const month = new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date()).slice(0, 7);
+    if (getSetting("monthly_report_last_sent") === month) return;
+    // ponytail: reintento en la siguiente petición del mes si falla el endpoint.
+    void sendMonthlyReport(month).catch(() => undefined);
+  } catch {
+    /* el informe mensual nunca debe tumbar la lectura */
+  }
 }
 
 async function handleGet(request: Request, parts: string[]) {
@@ -292,6 +325,7 @@ async function handleGet(request: Request, parts: string[]) {
   if (route === "reports") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
+    maybeMonthlyReport();
     const report = reportForDay({
       day: url.searchParams.get("day") ?? undefined,
       siteId: url.searchParams.get("site") ?? undefined,
@@ -302,6 +336,22 @@ async function handleGet(request: Request, parts: string[]) {
       scope: scopeOf(actor),
     });
     return json(report, 200, request);
+  }
+
+  if (route === "reports/dashboard") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    maybeMonthlyReport();
+    const dash = reportDashboard({
+      month: url.searchParams.get("month") ?? undefined,
+      siteId: url.searchParams.get("site") ?? undefined,
+      employeeId: url.searchParams.get("employee") ?? undefined,
+      countryId: url.searchParams.get("country") ?? undefined,
+      zoneId: url.searchParams.get("zone") ?? undefined,
+      scope: scopeOf(actor),
+    });
+    const seesMoney = canApprove(actor.role) || actor.role === "auditor";
+    return json(seesMoney ? dash : { ...dash, payroll: dash.payroll.map(redactMoney) }, 200, request);
   }
 
   if (route === "exports/pack") {
@@ -385,6 +435,20 @@ async function handleGet(request: Request, parts: string[]) {
     return json({ schedules: listSchedules(url.searchParams.get("employee") ?? undefined, allowedSiteIds(actor)) }, 200, request);
   }
 
+  if (route === "shifts") {
+    const actor = actorOrThrow(request);
+    if (isResponse(actor)) return actor;
+    return json({ shifts: listShifts() }, 200, request);
+  }
+
+  if (route === "contracts") {
+    // Sueldos: gerentes y auditor, y solo de las sedes de su alcance.
+    const actor = requireReader(request);
+    if (isResponse(actor)) return actor;
+    const rows = listContracts(url.searchParams.get("employee") ?? undefined) as Array<Record<string, unknown>>;
+    return json({ contracts: filterBySite(actor, rows, (c) => String(c.site_id)) }, 200, request);
+  }
+
   if (route === "exceptions") {
     const actor = actorOrThrow(request);
     if (isResponse(actor)) return actor;
@@ -404,6 +468,8 @@ async function handleGet(request: Request, parts: string[]) {
     const settings = listSettings();
     delete settings.supervisor_pin;
     delete settings.brand_logo; // pesa decenas de KB; se pide por /api/v1/brand
+    // La dirección del informe puede llevar claves: solo la ve quien la administra.
+    if (actor.role !== "superadmin") delete settings.monthly_report_endpoint;
     return json(
       {
         settings,
@@ -571,6 +637,7 @@ async function handlePost(request: Request, parts: string[]) {
         code: body.code,
         siteId: body.siteId,
         role: body.role,
+        by: actor.email,
       });
       if (body.pin) patchEmployee(employee.id, { pin: body.pin });
       return json({ employee: getEmployee(employee.id) }, 201, request);
@@ -721,10 +788,14 @@ async function handlePost(request: Request, parts: string[]) {
         approvedBy: actor.email,
         newTs,
         newType: body.newType,
+        force: actor.role === "superadmin",
       });
       if (!row) return json({ error: "Marcación no encontrada", code: "NOT_FOUND" }, 404, request);
       return json({ correction: row }, 201, request);
     } catch (error) {
+      if (error instanceof CorrectionWindowError) {
+        return json({ error: error.message, code: "CORRECTION_WINDOW" }, 403, request);
+      }
       return serverError(error, request);
     }
   }
@@ -738,22 +809,92 @@ async function handlePost(request: Request, parts: string[]) {
       startHm?: string;
       endHm?: string;
       lateGraceMin?: number;
+      shiftId?: string;
     }>(request);
-    if (!body.employeeId || body.weekday == null || !body.startHm || !body.endHm) {
-      return badRequest("employeeId, weekday, startHm y endHm son obligatorios", { code: "VALIDATION" }, request);
+    if (!body.employeeId || body.weekday == null || (!body.shiftId && (!body.startHm || !body.endHm))) {
+      return badRequest(
+        "employeeId, weekday y (startHm+endHm o shiftId) son obligatorios",
+        { code: "VALIDATION" },
+        request,
+      );
     }
     const target = getEmployee(body.employeeId);
     if (!target || !siteInScope(actor, target.siteId)) {
       return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
     }
-    const id = upsertSchedule({
-      employeeId: target.id,
-      weekday: body.weekday,
+    try {
+      const id = upsertSchedule({
+        employeeId: target.id,
+        weekday: body.weekday,
+        startHm: body.startHm,
+        endHm: body.endHm,
+        lateGraceMin: body.lateGraceMin,
+        shiftId: body.shiftId,
+      });
+      return json({ id }, 201, request);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("Turno no encontrado")) {
+        return json({ error: err.message, code: "NOT_FOUND" }, 404, request);
+      }
+      throw err;
+    }
+  }
+
+  // El catálogo de turnos es global: solo el superadmin lo cambia.
+  if (route === "shifts") {
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ id?: string; name?: string; startHm?: string; endHm?: string; breakMin?: number }>(request);
+    if (!body.name?.trim() || !body.startHm || !body.endHm) {
+      return badRequest("name, startHm y endHm son obligatorios", { code: "VALIDATION" }, request);
+    }
+    const id = upsertShift({
+      id: body.id,
+      name: body.name.trim(),
       startHm: body.startHm,
       endHm: body.endHm,
-      lateGraceMin: body.lateGraceMin,
+      breakMin: body.breakMin,
     });
     return json({ id }, 201, request);
+  }
+
+  if (route === "contracts") {
+    // El salario es de lo más sensible: gerentes y superadmin, y solo de empleados de su alcance.
+    const actor = requireApprover(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ employeeId?: string; monthlySalary?: number; weeklyHours?: number; currency?: string }>(request);
+    const salary = Number(body.monthlySalary);
+    const weekly = body.weeklyHours == null ? 42 : Number(body.weeklyHours);
+    if (!body.employeeId || !Number.isFinite(salary) || salary < 0 || salary > 1e10) {
+      return badRequest("employeeId y un monthlySalary válido son obligatorios", { code: "VALIDATION" }, request);
+    }
+    if (!Number.isFinite(weekly) || weekly < 1 || weekly > 84) {
+      return badRequest("weeklyHours debe estar entre 1 y 84", { code: "VALIDATION" }, request);
+    }
+    if (body.currency != null && !/^[A-Z]{3}$/.test(body.currency)) {
+      return badRequest("currency debe ser un código de 3 letras", { code: "VALIDATION" }, request);
+    }
+    const target = getEmployee(body.employeeId);
+    if (!target || !siteInScope(actor, target.siteId)) {
+      return json({ error: "No encontrado", code: "NOT_FOUND" }, 404, request);
+    }
+    const id = upsertContract({
+      employeeId: target.id,
+      monthlySalary: salary,
+      weeklyHours: weekly,
+      currency: body.currency,
+    });
+    recordEvent(getDb(), "contract.updated", { employeeId: target.id, siteId: target.siteId, by: actor.email });
+    return json({ id }, 201, request);
+  }
+
+  if (route === "reports/monthly-send") {
+    // Envía los datos de toda la empresa a una dirección externa: solo el superadmin.
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ month?: string }>(request).catch(() => ({}) as { month?: string });
+    const result = await sendMonthlyReport(body.month);
+    return json(result, result.ok ? 200 : 502, request);
   }
 
   if (route === "exceptions") {
@@ -799,6 +940,37 @@ async function handlePost(request: Request, parts: string[]) {
     return json({ id }, 201, request);
   }
 
+  // Estructura (regiones y sedes): solo el superadmin la cambia.
+  if (route === "zones") {
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ name?: string; countryId?: string }>(request);
+    try {
+      const zone = createZone({ name: body.name ?? "", countryId: body.countryId ?? "", by: actor.email });
+      return json({ zone }, 201, request);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "No se pudo crear", { code: "VALIDATION" }, request);
+    }
+  }
+
+  if (route === "sites") {
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ code?: string; name?: string; city?: string; zoneId?: string }>(request);
+    try {
+      const site = createSite({
+        code: body.code ?? "",
+        name: body.name ?? "",
+        city: body.city ?? "",
+        zoneId: body.zoneId ?? "",
+        by: actor.email,
+      });
+      return json({ site }, 201, request);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "No se pudo crear", { code: "VALIDATION" }, request);
+    }
+  }
+
   if (route === "settings/retention") {
     const actor = requireSuperadmin(request);
     if (isResponse(actor)) return actor;
@@ -829,7 +1001,7 @@ async function handlePatch(request: Request, parts: string[]) {
       if (body.siteId && !siteInScope(actor, body.siteId)) {
         return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
       }
-      const employee = patchEmployee(access.employee.id, body);
+      const employee = patchEmployee(access.employee.id, body, actor.email);
       if (body.revokeConsent) {
         insertEnrollmentAudit({
           employeeId: parts[1],
@@ -845,6 +1017,18 @@ async function handlePatch(request: Request, parts: string[]) {
       return serverError(error, request);
     }
   }
+  if (parts[0] === "sites" && parts[1] && parts.length === 2) {
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ name?: string; city?: string; zoneId?: string }>(request);
+    try {
+      const site = updateSite(parts[1], body, actor.email);
+      if (!site) return json({ error: "No encontrada", code: "NOT_FOUND" }, 404, request);
+      return json({ site }, 200, request);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "No se pudo guardar", { code: "VALIDATION" }, request);
+    }
+  }
   if (parts[0] === "alerts" && parts[1]) {
     const actor = requireWrite(request);
     if (isResponse(actor)) return actor;
@@ -856,6 +1040,8 @@ async function handlePatch(request: Request, parts: string[]) {
     const actor = requireSuperadmin(request);
     if (isResponse(actor)) return actor;
     const body = await parseJson<Record<string, string>> (request);
+    const invalid = settingsError(body);
+    if (invalid) return badRequest(invalid, { code: "VALIDATION" }, request);
     const allowed = [
       "event_types",
       "retention_days",
@@ -865,7 +1051,17 @@ async function handlePatch(request: Request, parts: string[]) {
       "alert_terminal_offline",
       "alert_sync_failed",
       "labor_max_daily_hours",
-      "labor_max_weekly_hours",
+      "max_weekly_hours",
+      "ot_day_multiplier",
+      "ot_night_multiplier",
+      "ot_holiday_multiplier",
+      "night_start_hm",
+      "night_end_hm",
+      "holidays",
+      "correction_window_hours",
+      "unjustified_absence_alert",
+      "monthly_report_endpoint",
+      "monthly_report_enabled",
     ];
     // La marca es global: solo el superadmin la cambia. Vacío = versión básica.
     const brandKeys = ["brand_name", "brand_primary", "brand_dark", "brand_light", "brand_logo"];

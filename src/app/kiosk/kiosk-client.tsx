@@ -18,6 +18,12 @@ import { LOCALE, TIMEZONE } from "@/lib/config";
 
 const SITES_KEY = "reloj-cr-sites";
 
+/** Solo las fallas de red o del servidor se guardan para reintentar; un rechazo (permiso, datos) no. */
+function retryable(err: unknown) {
+  const status = (err as { status?: number } | null)?.status;
+  return status == null || status >= 500;
+}
+
 type ResultState = {
   tone: "ok" | "bad" | "warn";
   title: string;
@@ -261,9 +267,18 @@ export function KioskClient() {
         if (navigator.onLine) {
           try {
             await api.createPunch(item);
-          } catch {
-            await enqueuePunch(item);
-            await refreshQueue();
+          } catch (err) {
+            if (retryable(err)) {
+              await enqueuePunch(item);
+              await refreshQueue();
+            } else {
+              setResult({
+                tone: "bad",
+                title: "No se registró",
+                detail: err instanceof Error ? err.message : "El servidor rechazó la marcación.",
+              });
+              return;
+            }
           }
         } else {
           await enqueuePunch(item);
@@ -291,7 +306,16 @@ export function KioskClient() {
             });
             return;
           }
-        } catch {
+        } catch (err) {
+          if (!retryable(err)) {
+            // Rechazada (por ejemplo, sin permiso): no se encola, porque nunca se aceptaría.
+            setResult({
+              tone: "bad",
+              title: "No se registró",
+              detail: err instanceof Error ? err.message : "El servidor rechazó la marcación.",
+            });
+            return;
+          }
           await enqueuePunch(item);
           await refreshQueue();
           setResult({

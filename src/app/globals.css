@@ -87,6 +87,29 @@
   flex-direction: column;
   gap: 18px;
 }
+/* En pantalla ancha la barra lateral queda fija: menú y sesión no se mueven al desplazarse. */
+@media (min-width: 841px) {
+  .rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
+.rail-session {
+  margin: 0 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.rail-session > span {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-session .native-select { width: 100%; justify-content: center; }
 .rail-brand {
   display: flex;
   gap: 10px;

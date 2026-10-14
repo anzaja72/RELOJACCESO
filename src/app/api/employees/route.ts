@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       siteId: body.siteId,
       role: body.role,
       consentAt: body.consentAt,
+      by: actor.email,
     });
     return json({ employee }, 201);
   } catch (error) {

@@ -1,7 +1,15 @@
 import { generateBriefing } from "@/lib/ai-briefing";
 import { llmComplete, llmInfo } from "@/lib/ai-llm";
 import { listPunches } from "@/lib/db";
-import { listCorrections, listEmployeesScoped, reportForDay, siteIdsForScope, todayLocal, type Scope } from "@/lib/db-ops";
+import {
+  listCorrections,
+  listEmployeesScoped,
+  reportForDay,
+  siteIdsForRegion,
+  siteIdsForScope,
+  todayLocal,
+  type Scope,
+} from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
 import { listTerminals } from "@/lib/db";
 import { dayBoundsUtc } from "@/lib/config";
@@ -33,16 +41,25 @@ function detectIntent(q: string): string {
   return "unknown";
 }
 
-function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
-  const report = reportForDay({ day, siteId, scope });
-  // Sin alcance explícito no se devuelve nada fuera de la sede pedida; null = todas las sedes.
+function retrieve(
+  intent: string,
+  day: string,
+  siteId?: string,
+  scope?: Scope,
+  countryId?: string,
+  zoneId?: string,
+) {
+  const report = reportForDay({ day, siteId, scope, countryId, zoneId });
+  // Dos filtros distintos: el alcance de quien pregunta (obligatorio) y la región que eligió (opcional).
   const allowed = scope ? siteIdsForScope(scope) : [];
   const inSites = (site: string | null | undefined) => !allowed || (site != null && allowed.includes(site));
+  const reg = siteIdsForRegion(countryId, zoneId);
+  const inRegion = (site: string | null | undefined) => !reg || (site != null && reg.has(site));
   const punches = listPunches({
     siteId,
     ...dayBoundsUtc(day),
     limit: 300,
-  }).filter((p) => inSites(p.siteId));
+  }).filter((p) => inSites(p.siteId) && inRegion(p.siteId));
   if (intent === "present") {
     const rows = report.rows.filter((r) => ["present", "on_time", "late"].includes(r.status));
     return {
@@ -92,7 +109,7 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
     return {
       label: "terminales",
       rows: listTerminals()
-        .filter((t) => inSites(t.siteId))
+        .filter((t) => inSites(t.siteId) && inRegion(t.siteId))
         .filter((t) => !siteId || t.siteId === siteId)
         .map((t) => ({ id: t.id, label: t.label, online: t.online, lastSeen: t.lastSeen })),
     };
@@ -120,13 +137,15 @@ function retrieve(intent: string, day: string, siteId?: string, scope?: Scope) {
   if (intent === "anomalies") {
     return {
       label: "anomalías",
-      rows: listAnomalies({ day, siteId }).filter((a) => inSites(a.siteId)).map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        message: a.message,
-        punchIds: a.punchIds,
-        reviewed: a.reviewed,
-      })),
+      rows: listAnomalies({ day, siteId })
+        .filter((a) => inSites(a.siteId) && (!a.siteId || inRegion(a.siteId)))
+        .map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          message: a.message,
+          punchIds: a.punchIds,
+          reviewed: a.reviewed,
+        })),
     };
   }
   return { label: intent, rows: [] as unknown[] };
@@ -173,6 +192,8 @@ export async function answerChat(input: {
   question: string;
   day?: string;
   siteId?: string;
+  countryId?: string;
+  zoneId?: string;
   scope?: Scope;
 }): Promise<ChatAnswer> {
   const day = input.day || todayLocal();
@@ -181,7 +202,13 @@ export async function answerChat(input: {
     return { answer: REFUSE, intent, cites: [], source: "canned", missing: false };
   }
   if (intent === "briefing") {
-    const briefing = await generateBriefing({ day, siteId: input.siteId, scope: input.scope });
+    const briefing = await generateBriefing({
+      day,
+      siteId: input.siteId,
+      countryId: input.countryId,
+      zoneId: input.zoneId,
+      scope: input.scope,
+    });
     return {
       answer: briefing.bullets.map((b, i) => `${i + 1}. ${b.text} (${b.href})`).join("\n"),
       intent,
@@ -190,13 +217,20 @@ export async function answerChat(input: {
       missing: false,
     };
   }
-  const data = retrieve(intent, day, input.siteId, input.scope);
+  const data = retrieve(intent, day, input.siteId, input.scope, input.countryId, input.zoneId);
   const fallback = canned(intent, day, input.siteId, data);
   const info = llmInfo();
   if (info.provider === "none" || intent === "unknown") return fallback;
   const raw = await llmComplete(
-    `Eres "Pregunta a Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
-    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({ day, siteId: input.siteId ?? null, intent, data })}`,
+    `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
+    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
+      day,
+      siteId: input.siteId ?? null,
+      countryId: input.countryId ?? null,
+      zoneId: input.zoneId ?? null,
+      intent,
+      data,
+    })}`,
   );
   if (!raw) return fallback;
   return {

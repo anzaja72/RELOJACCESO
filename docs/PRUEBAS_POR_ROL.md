@@ -54,6 +54,13 @@ Guía para validar qué ve y qué puede hacer cada perfil de Reloj CR. Las tabla
 | Exportar marcaciones | Sí | Sí | Sí | No | Sí |
 | Descargar expediente PDF | Sí | Sí | Sí | No | Sí |
 | Ver reporte del día | Sí | Sí | Sí | Sí | Sí |
+| Ver sueldos y valores de nómina | Sí | Sí | Sí | No (ve horas, sin dinero) | Sí |
+| Fijar el sueldo de un empleado de su alcance | Sí | Sí | Sí | No | No |
+| Crear o cambiar turnos (catálogo) | Sí | No | No | No | No |
+| Asignar un turno a un empleado de su alcance | Sí | Sí | Sí | No | No |
+| Enviar el informe mensual al sistema externo | Sí | No | No | No | No |
+| Crear o editar regiones y sedes | Sí | No | No | No | No |
+| Revocar una tablet de su alcance | Sí | Sí | Sí | No | No |
 | Guardar ajustes globales | Sí | No | No | No | No |
 | Cambiar marca y logo | Sí | No | No | No | No |
 | Ver lista de usuarios | Sí | No | No | No | No |
@@ -107,6 +114,8 @@ Marquen cada punto como correcto, incorrecto u observación.
 
 ## 6. Pendiente
 
+- **Kiosco:** una tablet activada marca para quien esté frente a ella, sin importar quién inició sesión en el navegador. El perfil solo importa para activarla. Un rechazo del servidor (por ejemplo, sin permiso) ya no se guarda en la cola como si fuera una marca pendiente.
+- **Ajustes:** quien no es superadmin ve los ajustes en modo lectura; los controles están desactivados y la vista previa de la marca no cambia la aplicación hasta guardar.
 - **Interfaz:** el menú es igual para todos; las acciones no permitidas muestran un error. Falta ocultar o desactivar lo que cada perfil no puede usar.
 - **Terminales:** revocar un terminal verifica el rol, pero no que sea de la sede del usuario.
 - **Alertas:** confirmar una alerta (acusar) no se limita a la sede del usuario.

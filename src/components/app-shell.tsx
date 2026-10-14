@@ -31,7 +31,7 @@ const links = [
   { href: "/people", label: "Personas", icon: Users },
   { href: "/structure", label: "Estructura", icon: Building2 },
   { href: "/reports", label: "Reportes", icon: BarChart3 },
-  { href: "/ai", label: "Pregunta", icon: Sparkles },
+  { href: "/ai", label: "IAnálisis", icon: Sparkles },
   { href: "/audit", label: "Auditoría", icon: ScrollText },
   { href: "/settings", label: "Ajustes", icon: Settings },
   { href: "/docs", label: "API", icon: FileText },
@@ -124,6 +124,30 @@ export function AppShell({
             <span>{scope ?? "…"}</span>
           </div>
         )}
+        {/* La sesión vive en la barra lateral, que no se mueve al cambiar de pantalla. */}
+        <div className="rail-session">
+          {user ? (
+            <>
+              <span title={user.email}>{user.name}</span>
+              <button
+                type="button"
+                className="native-select shade"
+                onClick={() => {
+                  clearSession();
+                  setUser(null);
+                  router.push("/login");
+                }}
+              >
+                Cerrar sesión
+              </button>
+            </>
+          ) : (
+            <Link href="/login" className="rail-link shade" style={{ minHeight: 34 }}>
+              <LogIn className="size-4" />
+              Entrar
+            </Link>
+          )}
+        </div>
         <p className="rail-foot">
           Oferta software v1
           <br />
@@ -138,24 +162,6 @@ export function AppShell({
           </div>
           <div className="canvas-actions">
             {actions}
-            {user ? (
-              <button
-                type="button"
-                className="native-select shade"
-                onClick={() => {
-                  clearSession();
-                  setUser(null);
-                  router.push("/login");
-                }}
-              >
-                {user.name} · salir
-              </button>
-            ) : (
-              <Link href="/login" className="rail-link shade" style={{ minHeight: 34 }}>
-                <LogIn className="size-4" />
-                Entrar
-              </Link>
-            )}
           </div>
         </header>
         <div className="canvas-body">

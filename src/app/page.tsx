@@ -47,8 +47,8 @@ export default function HomePage() {
         </Link>
         <Link href="/ai" className="home-card shade">
           <span className="pill">IA v1.1</span>
-          <h2>Pregunta</h2>
-          <p>Briefing del día y chat acotado, con citas.</p>
+          <h2>IAnálisis</h2>
+          <p>Briefing, chat acotado e informe regional, con citas.</p>
         </Link>
       </div>
       <div className="detail">

@@ -160,6 +160,27 @@ export default function EnrollPage() {
     }
   }
 
+  // Crear la ficha sin capturar el rostro: la biometría se agrega después, con la autorización.
+  async function createWithoutBiometrics() {
+    setError(null);
+    if (!name.trim() || !code.trim() || !siteId) {
+      setError("Nombre, código y sede son obligatorios.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await api.createEmployee({ name, code, siteId, role });
+      setSelectedId(created.employee.id);
+      const refreshed = await api.employees(siteId);
+      setEmployees(refreshed.employees);
+      setStatus(`${name} quedó creada sin biometría. Puede capturar su rostro cuando firme la autorización.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function revoke() {
     if (!selectedId) return;
     setSaving(true);
@@ -263,8 +284,13 @@ export default function EnrollPage() {
             </label>
             <div className="flex flex-wrap gap-2">
               <Button className="shade" onClick={() => void save()} disabled={saving}>
-                Guardar
+                Guardar con biometría
               </Button>
+              {!selectedId && (
+                <Button variant="outline" className="shade" onClick={() => void createWithoutBiometrics()} disabled={saving}>
+                  Crear sin biometría
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="shade"

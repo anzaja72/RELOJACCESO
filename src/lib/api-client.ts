@@ -198,6 +198,49 @@ export const api = {
     }),
   me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
   reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
+  dashboard: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports/dashboard?${qs}`, { admin: true }),
+  monthlySend: (month?: string) =>
+    request<{ ok: boolean; status?: number; error?: string }>("/api/v1/reports/monthly-send", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(month ? { month } : {}),
+    }),
+  shifts: () => request<{ shifts: Array<Record<string, unknown>> }>("/api/v1/shifts", { admin: true }),
+  saveShift: (body: { id?: string; name: string; startHm: string; endHm: string; breakMin?: number }) =>
+    request<{ id: string }>("/api/v1/shifts", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  contracts: (employee?: string) =>
+    request<{ contracts: Array<Record<string, unknown>> }>(
+      employee ? `/api/v1/contracts?employee=${encodeURIComponent(employee)}` : "/api/v1/contracts",
+      { admin: true },
+    ),
+  saveContract: (body: { employeeId: string; monthlySalary: number; weeklyHours: number; currency?: string }) =>
+    request<{ id: string }>("/api/v1/contracts", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  saveSchedule: (body: {
+    employeeId: string;
+    weekday: number;
+    startHm?: string;
+    endHm?: string;
+    lateGraceMin?: number;
+    shiftId?: string;
+  }) =>
+    request<{ id: string }>("/api/v1/schedules", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  schedules: (employee?: string) =>
+    request<{ schedules: Array<Record<string, unknown>> }>(
+      employee ? `/api/v1/schedules?employee=${encodeURIComponent(employee)}` : "/api/v1/schedules",
+      { admin: true },
+    ),
   settings: () => request<Record<string, unknown>>("/api/v1/settings", { admin: true }),
   integrity: () =>
     request<{
@@ -206,6 +249,22 @@ export const api = {
       chain: { ok: boolean; checked: number; brokenAt: string | null; reason: string | null };
       punches: { checked: number; uncovered: number; mismatches: Array<{ id: string; problem: string; detail: string }> };
     }>("/api/v1/integrity", { admin: true }),
+  createZone: (body: { name: string; countryId: string }) =>
+    request<{ zone: { id: string; name: string } }>("/api/v1/zones", {
+      method: "POST",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  createSite: (body: { code: string; name: string; city: string; zoneId: string }) =>
+    request<{ site: Site }>("/api/v1/sites", { method: "POST", admin: true, body: JSON.stringify(body) }),
+  updateSite: (id: string, body: { name?: string; city?: string; zoneId?: string }) =>
+    request<{ site: Site }>(`/api/v1/sites/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      admin: true,
+      body: JSON.stringify(body),
+    }),
+  revokeTerminal: (id: string) =>
+    request<{ ok: boolean }>(`/api/v1/terminals/${encodeURIComponent(id)}/revoke`, { method: "POST", admin: true }),
   brand: () =>
     request<{ brand: { name: string; primary: string; dark: string; light: string } | null }>("/api/v1/brand"),
   saveSettings: (body: Record<string, string>) =>
@@ -243,15 +302,20 @@ export const api = {
       `/api/v1/employees?includeDeleted=${includeDeleted ? "1" : "0"}`,
       { admin: true },
     ),
-  briefing: (day?: string, site?: string) =>
+  briefing: (day?: string, site?: string, country?: string, zone?: string) =>
     request<{
       briefing: { source: string; bullets: Array<{ text: string; href: string; cites: Array<{ type: string; id: string }> }> };
       llm: { provider: string };
     }>(
-      `/api/v1/ai/briefing?${new URLSearchParams({ ...(day ? { day } : {}), ...(site ? { site } : {}) }).toString()}`,
+      `/api/v1/ai/briefing?${new URLSearchParams({
+        ...(day ? { day } : {}),
+        ...(site ? { site } : {}),
+        ...(country ? { country } : {}),
+        ...(zone ? { zone } : {}),
+      }).toString()}`,
       { method: "POST", admin: true },
     ),
-  chat: (body: { question: string; day?: string; siteId?: string }) =>
+  chat: (body: { question: string; day?: string; siteId?: string; countryId?: string; zoneId?: string }) =>
     request<{
       answer: string;
       intent: string;

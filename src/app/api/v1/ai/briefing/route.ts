@@ -25,6 +25,8 @@ export async function POST(request: Request) {
     const briefing = await generateBriefing({
       day: url.searchParams.get("day") ?? undefined,
       siteId: site,
+      countryId: url.searchParams.get("country") ?? undefined,
+      zoneId: url.searchParams.get("zone") ?? undefined,
       scope: { role: actor.role, scopeType: actor.scopeType, scopeId: actor.scopeId },
     });
     recordEvent(getDb(), "ai.briefing", {

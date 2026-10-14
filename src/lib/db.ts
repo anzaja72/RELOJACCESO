@@ -29,6 +29,7 @@ const dbFile =
 const globalForDb = globalThis as unknown as {
   __bioDb?: Database.Database;
   __bioV3?: boolean;
+  __bioV4?: boolean;
 };
 
 function createDb() {
@@ -36,17 +37,21 @@ function createDb() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   migrate(db);
+  // El sembrado inicial ya escribe eventos: la cadena de sellos debe existir antes.
+  ensureEventChain(db);
   seed(db);
   migrateV2(db);
   migrateV3(db);
+  migrateV4(db);
   return db;
 }
 
 export function getDb() {
   if (!globalForDb.__bioDb) {
     globalForDb.__bioDb = createDb();
-  } else if (!globalForDb.__bioV3) {
+  } else if (!globalForDb.__bioV3 || !globalForDb.__bioV4) {
     migrateV3(globalForDb.__bioDb);
+    migrateV4(globalForDb.__bioDb);
     globalForDb.__bioV3 = true;
   }
   return globalForDb.__bioDb;
@@ -402,13 +407,17 @@ function migrateV3(db: Database.Database) {
     db.exec("ALTER TABLE terminals ADD COLUMN activated_by TEXT");
     db.exec("ALTER TABLE terminals ADD COLUMN revoked_at TEXT");
   }
-  // Cadena de hashes sobre los eventos (ver src/lib/integrity.ts).
+  ensureEventChain(db);
+  globalForDb.__bioV3 = true;
+}
+
+/** Cadena de hashes sobre los eventos (ver src/lib/integrity.ts). Idempotente. */
+function ensureEventChain(db: Database.Database) {
   if (!hasColumn(db, "events", "hash")) {
     db.exec("ALTER TABLE events ADD COLUMN prev_hash TEXT");
     db.exec("ALTER TABLE events ADD COLUMN hash TEXT");
   }
   sealEvents(db);
-  globalForDb.__bioV3 = true;
 }
 
 /**
@@ -416,6 +425,8 @@ function migrateV3(db: Database.Database) {
  * sellados desde la fecha de migración: no se puede probar nada anterior a ella).
  */
 function sealEvents(db: Database.Database) {
+  // En una base nueva se llama antes de migrateV2, que es quien crea esta tabla.
+  db.exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   const pending = db
     .prepare("SELECT rowid AS rid, id, type, payload, created_at FROM events WHERE hash IS NULL ORDER BY rowid")
     .all() as Array<{ rid: number; id: string; type: string; payload: string; created_at: string }>;
@@ -435,6 +446,50 @@ function sealEvents(db: Database.Database) {
       prev = hash;
     }
   })();
+}
+
+function migrateV4(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shifts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      start_hm TEXT NOT NULL,
+      end_hm TEXT NOT NULL,
+      break_min INTEGER NOT NULL DEFAULT 60
+    );
+    CREATE TABLE IF NOT EXISTS contracts (
+      id TEXT PRIMARY KEY,
+      employee_id TEXT UNIQUE NOT NULL,
+      monthly_salary REAL NOT NULL,
+      weekly_hours REAL NOT NULL DEFAULT 48,
+      currency TEXT NOT NULL DEFAULT 'COP'
+    );
+  `);
+  if (!hasColumn(db, "schedules", "shift_id")) {
+    db.exec("ALTER TABLE schedules ADD COLUMN shift_id TEXT");
+  }
+  const set = db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)");
+  set.run("ot_day_multiplier", "1.25");
+  set.run("ot_night_multiplier", "1.75");
+  set.run("ot_holiday_multiplier", "2.0");
+  set.run("night_start_hm", "19:00");
+  set.run("night_end_hm", "06:00");
+  set.run("holidays", "[]");
+  set.run("correction_window_hours", "48");
+  set.run("unjustified_absence_alert", "3");
+  set.run("max_weekly_hours", "42");
+  set.run("monthly_report_endpoint", "");
+  set.run("monthly_report_enabled", "0");
+  set.run("monthly_report_last_sent", "");
+  const shifts = db.prepare("SELECT COUNT(*) as n FROM shifts").get() as { n: number };
+  if (shifts.n === 0) {
+    const ins = db.prepare("INSERT INTO shifts (id,name,start_hm,end_hm,break_min) VALUES (?,?,?,?,?)");
+    ins.run("shift_std", "Jornada estándar 07:00–16:00", "07:00", "16:00", 60);
+    ins.run("shift_aman", "Mañana 06:00–14:00", "06:00", "14:00", 60);
+    ins.run("shift_tarde", "Tarde 14:00–22:00", "14:00", "22:00", 60);
+    ins.run("shift_noche", "Noche 22:00–06:00", "22:00", "06:00", 60);
+  }
+  globalForDb.__bioV4 = true;
 }
 
 export function recordEvent(
@@ -523,6 +578,90 @@ export function listSites(): Site[] {
   );
 }
 
+const slug = (text: string) =>
+  text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "x";
+
+/** Crea una región (zona) dentro de un país. Error si el país no existe o el nombre ya está en uso. */
+export function createZone(input: { name: string; countryId: string; by: string }) {
+  const db = getDb();
+  const name = input.name.trim();
+  if (!name || name.length > 60) throw new Error("El nombre de la región es obligatorio (máx. 60 caracteres)");
+  if (!db.prepare("SELECT 1 FROM countries WHERE id = ?").get(input.countryId)) throw new Error("País no encontrado");
+  const dup = db
+    .prepare("SELECT 1 FROM zones WHERE country_id = ? AND lower(name) = lower(?)")
+    .get(input.countryId, name);
+  if (dup) throw new Error("Ya existe una región con ese nombre");
+  const code = slug(name).toUpperCase().slice(0, 12);
+  let id = `zone_${slug(name)}`;
+  if (db.prepare("SELECT 1 FROM zones WHERE id = ?").get(id)) id = `${id}_${ulid().slice(-6).toLowerCase()}`;
+  db.prepare("INSERT INTO zones (id, country_id, code, name) VALUES (?,?,?,?)").run(id, input.countryId, code, name);
+  recordEvent(db, "zone.created", { id, name, countryId: input.countryId, by: input.by });
+  return { id, name, country_id: input.countryId };
+}
+
+/** Crea una sede. El código es único y se guarda en mayúsculas. */
+export function createSite(input: { code: string; name: string; city: string; zoneId: string; by: string }) {
+  const db = getDb();
+  const code = input.code.trim().toUpperCase();
+  const name = input.name.trim();
+  const city = input.city.trim();
+  if (!/^[A-Z0-9_-]{2,12}$/.test(code)) throw new Error("El código debe tener de 2 a 12 letras, números, guion o guion bajo");
+  if (!name || name.length > 80) throw new Error("El nombre de la sede es obligatorio (máx. 80 caracteres)");
+  if (!city || city.length > 60) throw new Error("La ciudad es obligatoria (máx. 60 caracteres)");
+  const zone = db.prepare("SELECT id, country_id FROM zones WHERE id = ?").get(input.zoneId) as
+    | { id: string; country_id: string }
+    | undefined;
+  if (!zone) throw new Error("Región no encontrada");
+  if (db.prepare("SELECT 1 FROM sites WHERE code = ?").get(code)) throw new Error("Ya existe una sede con ese código");
+  const id = `site_${slug(code)}`;
+  if (db.prepare("SELECT 1 FROM sites WHERE id = ?").get(id)) throw new Error("Ya existe una sede con ese identificador");
+  db.prepare(
+    "INSERT INTO sites (id, code, name, city, timezone, country_id, zone_id) VALUES (?,?,?,?,?,?,?)",
+  ).run(id, code, name, city, TIMEZONE, zone.country_id, zone.id);
+  recordEvent(db, "site.created", { id, code, name, siteId: id, zoneId: zone.id, by: input.by });
+  return getSiteByCode(id)!;
+}
+
+/** Cambia nombre, ciudad o región de una sede. El código no cambia: lo usan tablets y reportes. */
+export function updateSite(
+  id: string,
+  patch: { name?: string; city?: string; zoneId?: string },
+  by: string,
+) {
+  const db = getDb();
+  const site = getSiteByCode(id);
+  if (!site) return null;
+  const name = patch.name == null ? site.name : patch.name.trim();
+  const city = patch.city == null ? site.city : patch.city.trim();
+  if (!name || name.length > 80) throw new Error("El nombre de la sede es obligatorio (máx. 80 caracteres)");
+  if (!city || city.length > 60) throw new Error("La ciudad es obligatoria (máx. 60 caracteres)");
+  let zoneId = site.zoneId ?? null;
+  let countryId = site.countryId ?? null;
+  if (patch.zoneId && patch.zoneId !== zoneId) {
+    const zone = db.prepare("SELECT id, country_id FROM zones WHERE id = ?").get(patch.zoneId) as
+      | { id: string; country_id: string }
+      | undefined;
+    if (!zone) throw new Error("Región no encontrada");
+    zoneId = zone.id;
+    countryId = zone.country_id;
+  }
+  db.prepare("UPDATE sites SET name = ?, city = ?, zone_id = ?, country_id = ? WHERE id = ?").run(
+    name,
+    city,
+    zoneId,
+    countryId,
+    site.id,
+  );
+  recordEvent(db, "site.updated", { id: site.id, siteId: site.id, name, city, zoneId, by });
+  return getSiteByCode(site.id)!;
+}
+
 export function getSiteByCode(code: string): Site | undefined {
   const row = getDb()
     .prepare("SELECT * FROM sites WHERE code = ? OR id = ?")
@@ -574,6 +713,8 @@ export function createEmployee(input: {
   siteId: string;
   role?: string;
   consentAt?: string | null;
+  /** Quién lo crea (correo), para el registro de auditoría. */
+  by?: string;
 }): Employee {
   const site = getSiteByCode(input.siteId);
   if (!site) throw new Error("Sede no encontrada");
@@ -592,7 +733,13 @@ export function createEmployee(input: {
       input.consentAt ?? null,
       new Date().toISOString(),
     );
-  recordEvent(getDb(), "employee.created", { id, code: input.code, siteId: site.id });
+  recordEvent(getDb(), "employee.created", {
+    id,
+    code: input.code.trim().toUpperCase(),
+    name: input.name.trim(),
+    siteId: site.id,
+    by: input.by ?? null,
+  });
   return getEmployee(id)!;
 }
 
@@ -614,6 +761,7 @@ export function patchEmployee(
     pin?: string | null;
     role?: string;
   },
+  by?: string,
 ) {
   const current = getEmployee(id);
   if (!current) throw new Error("Colaborador no encontrado");
@@ -631,11 +779,24 @@ export function patchEmployee(
     const site = getSiteByCode(patch.siteId);
     if (!site) throw new Error("Sede destino no encontrada");
     db.prepare("UPDATE employees SET site_id = ? WHERE id = ?").run(site.id, id);
-    recordEvent(db, "employee.transferred", { id, from: current.siteId, to: site.id });
+    recordEvent(db, "employee.transferred", {
+      id,
+      name: current.name,
+      from: current.siteId,
+      to: site.id,
+      siteId: site.id,
+      by: by ?? null,
+    });
   }
   if (patch.active !== undefined) {
     db.prepare("UPDATE employees SET active = ? WHERE id = ?").run(patch.active ? 1 : 0, id);
-    recordEvent(db, "employee.updated", { id, active: patch.active });
+    recordEvent(db, "employee.updated", {
+      id,
+      name: current.name,
+      siteId: current.siteId,
+      active: patch.active,
+      by: by ?? null,
+    });
   }
   if (patch.pin === null) {
     db.prepare("UPDATE employees SET pin_hash = NULL WHERE id = ?").run(id);
@@ -648,7 +809,13 @@ export function patchEmployee(
       id,
     );
     db.prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
-    recordEvent(db, "employee.deleted", { id, templatesWiped: true });
+    recordEvent(db, "employee.deleted", {
+      id,
+      name: current.name,
+      siteId: current.siteId,
+      templatesWiped: true,
+      by: by ?? null,
+    });
   }
   if (patch.deleted === false) {
     db.prepare("UPDATE employees SET deleted_at = NULL WHERE id = ?").run(id);
@@ -656,7 +823,7 @@ export function patchEmployee(
   if (patch.revokeConsent) {
     db.prepare("UPDATE employees SET consent_at = NULL WHERE id = ?").run(id);
     db.prepare("DELETE FROM face_templates WHERE employee_id = ?").run(id);
-    recordEvent(db, "consent.revoked", { id });
+    recordEvent(db, "consent.revoked", { id, name: current.name, siteId: current.siteId, by: by ?? null });
   }
   return getEmployee(id)!;
 }
@@ -680,7 +847,12 @@ export function wipeTemplates(employeeId: string, audit?: { operatorId?: string 
       new Date().toISOString(),
       "wipe",
     );
-  recordEvent(getDb(), "template.wiped", { employeeId });
+  recordEvent(getDb(), "template.wiped", {
+    employeeId,
+    name: emp.name,
+    siteId: emp.siteId,
+    by: audit?.operatorName ?? null,
+  });
 }
 
 export function listTemplates(siteId?: string): FaceTemplate[] {
@@ -739,6 +911,8 @@ export function addTemplates(
     );
   recordEvent(getDb(), "template.enrolled", {
     employeeId,
+    name: getEmployee(employeeId)?.name ?? null,
+    siteId: audit?.siteId ?? getEmployee(employeeId)?.siteId ?? null,
     count: descriptors.length,
     operator: audit?.operatorName ?? null,
   });
