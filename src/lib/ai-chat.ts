@@ -11,7 +11,7 @@ import {
   type Scope,
 } from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
-import { listTerminals } from "@/lib/db";
+import { listSites, listTerminals } from "@/lib/db";
 import { dayBoundsUtc } from "@/lib/config";
 
 export type ChatCite = { type: string; id: string };
@@ -50,6 +50,7 @@ function retrieve(
   zoneId?: string,
 ) {
   const report = reportForDay({ day, siteId, scope, countryId, zoneId });
+  const siteLabel = new Map(listSites().map((x) => [x.id, `${x.code} ${x.name}`]));
   // Dos filtros distintos: el alcance de quien pregunta (obligatorio) y la región que eligió (opcional).
   const allowed = scope ? siteIdsForScope(scope) : [];
   const inSites = (site: string | null | undefined) => !allowed || (site != null && allowed.includes(site));
@@ -67,6 +68,7 @@ function retrieve(
       rows: rows.map((r) => ({
         employeeId: r.employee.id,
         name: r.employee.name,
+        site: siteLabel.get(r.employee.siteId) ?? r.employee.siteId,
         status: r.status,
         punchId: r.lastPunch?.id ?? null,
       })),
@@ -80,6 +82,7 @@ function retrieve(
         .map((r) => ({
           employeeId: r.employee.id,
           name: r.employee.name,
+        site: siteLabel.get(r.employee.siteId) ?? r.employee.siteId,
           lateMin: r.lateMin,
           punchId: r.lastPunch?.id ?? null,
         })),
@@ -90,7 +93,11 @@ function retrieve(
       label: "ausencias",
       rows: report.rows
         .filter((r) => r.status === "absent")
-        .map((r) => ({ employeeId: r.employee.id, name: r.employee.name })),
+        .map((r) => ({
+          employeeId: r.employee.id,
+          name: r.employee.name,
+          site: siteLabel.get(r.employee.siteId) ?? r.employee.siteId,
+        })),
     };
   }
   if (intent === "omission") {
@@ -101,6 +108,7 @@ function retrieve(
         .map((r) => ({
           employeeId: r.employee.id,
           name: r.employee.name,
+        site: siteLabel.get(r.employee.siteId) ?? r.employee.siteId,
           punchId: r.lastPunch?.id ?? null,
         })),
     };
@@ -230,13 +238,14 @@ export async function answerChat(input: {
       countryId: input.countryId,
       zoneId: input.zoneId,
     });
+    const sites = new Map(listSites().map((x) => [x.id, `${x.code} ${x.name}`]));
     const byStatus: Record<string, number> = {};
     for (const r of report.rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
     const pick = (status: string) =>
       report.rows
         .filter((r) => r.status === status)
         .slice(0, 25)
-        .map((r) => ({ employeeId: r.employee.id, name: r.employee.name }));
+        .map((r) => ({ employeeId: r.employee.id, name: r.employee.name, site: sites.get(r.employee.siteId) ?? r.employee.siteId }));
     const free = await llmComplete(
       `Eres "IAnálisis de Reloj CR". Respondes en español, breve, solo con los hechos dados sobre asistencia del día. Cita ids reales (employee). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
       `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
@@ -257,7 +266,7 @@ export async function answerChat(input: {
     };
   }
   const raw = await llmComplete(
-    `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
+    `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Cada fila trae su sede en el campo site (p. ej. R01): si la pregunta nombra una sede, usa solo las filas de esa sede; si hay filas pero ninguna es de esa sede, dilo. Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
     `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
       day,
       siteId: input.siteId ?? null,
@@ -268,6 +277,8 @@ export async function answerChat(input: {
     })}`,
   );
   if (!raw) return fallback;
+  // Con datos disponibles, una negativa del modelo es peor que la lista directa.
+  if (raw.includes("[NO ENCONTRADO]") && (data.rows as unknown[]).length > 0) return fallback;
   return {
     answer: raw,
     intent,

@@ -146,7 +146,7 @@ export default function AiPage() {
         <div className="detail">
           <h2>Consulta acotada</h2>
           <p className="muted">
-            Sin clave LLM usa mapeos fijos. Con OPENAI_API_KEY o ANTHROPIC_API_KEY redacta sobre los mismos hechos.
+            Sin clave de IA responde con listas fijas. Con una clave configurada (NVIDIA, OpenAI o Anthropic) redacta sobre los mismos hechos.
             Filtre por país, zona o sede para informes regionales.
           </p>
           <div className="form" style={{ marginTop: 12 }}>
