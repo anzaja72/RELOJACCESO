@@ -60,3 +60,6 @@ graphify-out/cost.json
 
 # datos de la demo local
 .demo-data
+
+# guía de pruebas con la contraseña
+PRUEBAS_USUARIO_ENVIAR.md
