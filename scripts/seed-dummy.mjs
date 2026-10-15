@@ -142,7 +142,9 @@ const tx = db.transaction(() => {
   };
 
   // Lunes 2026-09-28 .. viernes dentro de octubre (días laborables con agenda).
-  for (let day = 1; day <= 9; day++) {
+  // Octubre de 2026 hasta hoy (máximo el 31); si hoy está fuera de ese mes, hasta el 9.
+  const lastDay = today.startsWith("2026-10") ? Number(today.slice(8, 10)) : 9;
+  for (let day = 1; day <= lastDay; day++) {
     const date = `2026-10-${String(day).padStart(2, "0")}`;
     const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
     if (dow === 0 || dow === 6) continue; // fin de semana: sin agenda → ausentes
