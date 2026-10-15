@@ -59,7 +59,10 @@ export async function llmComplete(system: string, user: string): Promise<string 
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn(`[llm] anthropic respondió HTTP ${res.status}`);
+        return null;
+      }
       const data = (await res.json()) as { content?: Array<{ text?: string }> };
       return data.content?.[0]?.text ?? null;
     }
@@ -109,7 +112,10 @@ export async function llmComplete(system: string, user: string): Promise<string 
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[llm] ${info.provider} respondió HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return null;
+    }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
     };
@@ -119,7 +125,8 @@ export async function llmComplete(system: string, user: string): Promise<string 
       return content.map((p) => p.text || "").join("\n").trim() || null;
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`[llm] ${info.provider} falló: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
     return null;
   }
 }
