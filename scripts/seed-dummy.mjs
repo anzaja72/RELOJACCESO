@@ -67,12 +67,10 @@ if (process.env.NODE_ENV === "production" && !force) {
 const foreign = db
   .prepare("SELECT count(*) n FROM punches WHERE id NOT LIKE 'pd%' AND captured_at >= '2026-10-01' AND employee_id IN (" + EXISTING.map(() => "?").join(",") + ")")
   .get(...EXISTING).n;
-if (foreign > 0 && !force) {
-  console.error(
-    `seed-dummy: hay ${foreign} marcaciones reales de octubre en esta base que se borrarían. ` +
-      "Use una base de demostración (otro DATA_DIR) o DEMO_SEED_FORCE=1 si de verdad quiere borrarlas.",
-  );
-  process.exit(1);
+// Con marcaciones reales de los empleados originales no se tocan: solo se generan los 100 ficticios.
+const touchExisting = foreign === 0 || force;
+if (!touchExisting) {
+  console.log(`seed-dummy: ${foreign} marcaciones reales de octubre se conservan; solo se cargan los empleados ficticios.`);
 }
 
 const now = localNow();
@@ -81,7 +79,9 @@ const today = now.date;
 // ---------- limpieza idempotente ----------
 db.prepare("DELETE FROM exceptions WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM punches WHERE employee_id LIKE 'emp_d%'").run();
-db.prepare(`DELETE FROM punches WHERE employee_id IN (${EXISTING.map(() => "?").join(",")}) AND captured_at >= '2026-10-01'`).run(...EXISTING);
+if (touchExisting) {
+  db.prepare(`DELETE FROM punches WHERE employee_id IN (${EXISTING.map(() => "?").join(",")}) AND captured_at >= '2026-10-01'`).run(...EXISTING);
+}
 db.prepare("DELETE FROM schedules WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM contracts WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM employees WHERE id LIKE 'emp_d%'").run();
@@ -150,7 +150,7 @@ const tx = db.transaction(() => {
     if (dow === 0 || dow === 6) continue; // fin de semana: sin agenda → ausentes
     const isToday = date === today;
 
-    for (const e of [...employees, ...EXISTING.map((id) => ({ id, kind: "std", site: null }))]) {
+    for (const e of [...employees, ...(touchExisting ? EXISTING : []).map((id) => ({ id, kind: "std", site: null }))]) {
       const cfg = CFG[e.kind] ?? CFG.std;
       const emp = employees.find((x) => x.id === e.id) ?? {
         id: e.id,
