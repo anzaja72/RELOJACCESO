@@ -63,6 +63,9 @@ type Dash = {
     extraDayValue: number;
     extraNightValue: number;
     extraHolidayValue: number;
+    surchargeValue: number;
+    absenceDays: number;
+    absenceDiscount: number;
     totalValue: number;
   }>;
   params: {
@@ -393,7 +396,7 @@ function ReportsPage() {
             {dash.params.absenceThreshold} faltas
           </h2>
           <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
-            Estimación informativa a partir de las marcaciones y los contratos cargados. No reemplaza la liquidación de nómina.
+            Valor de los recargos y las horas extra según las marcaciones, menos las ausencias injustificadas. Se suma al sueldo base: no incluye seguridad social, incapacidades ni prestaciones, que liquida el sistema de nómina.
           </p>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
@@ -407,8 +410,9 @@ function ReportsPage() {
                   <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra noct.</th>
                   <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra fest.</th>
                   <th style={{ padding: "6px 8px", textAlign: "right" }}>Valor hora</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Valor extras</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Total</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Recargos y extras</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Ausencias</th>
+                  <th style={{ padding: "6px 8px", textAlign: "right" }}>A pagar adicional</th>
                 </tr>
               </thead>
               <tbody>
@@ -428,7 +432,10 @@ function ReportsPage() {
                       {p.hasContract ? `$${num(p.hourlyRate)} ${p.currency}` : "—"}
                     </td>
                     <td style={{ padding: "7px 8px", textAlign: "right" }}>
-                      {p.hasContract ? `$${num(p.extraDayValue + p.extraNightValue + p.extraHolidayValue)} ${p.currency}` : "—"}
+                      {p.hasContract ? `$${num(p.surchargeValue + p.extraDayValue + p.extraNightValue + p.extraHolidayValue)} ${p.currency}` : "—"}
+                    </td>
+                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
+                      {p.hasContract ? (p.absenceDays > 0 ? `−$${num(p.absenceDiscount)} (${p.absenceDays} d)` : "—") : "—"}
                     </td>
                     <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>
                       {p.hasContract ? `$${num(p.totalValue)} ${p.currency}` : "—"}
@@ -437,7 +444,7 @@ function ReportsPage() {
                 ))}
                 {dash.payroll.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="empty" style={{ textAlign: "center" }}>
+                    <td colSpan={11} className="empty" style={{ textAlign: "center" }}>
                       Sin colaboradores en el filtro.
                     </td>
                   </tr>

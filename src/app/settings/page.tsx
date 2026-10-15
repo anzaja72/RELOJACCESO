@@ -478,7 +478,7 @@ export default function SettingsPage() {
               <strong>{c.employee_name}</strong>
               <span>
                 ${c.monthly_salary.toLocaleString("es-CO")} {c.currency} · {c.weekly_hours} h/semana · $
-                {(c.monthly_salary / (c.weekly_hours * 4.33)).toFixed(0)}/hora
+                {(c.monthly_salary / (c.weekly_hours * 5)).toFixed(0)}/hora
               </span>
             </div>
           ))}

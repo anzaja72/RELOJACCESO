@@ -1,6 +1,7 @@
 // Cálculo de horas trabajadas y valores: ordinarias vs extra (diurna/nocturna/festiva).
 import type { Punch } from "./types";
 import { dayBoundsUtc, TIMEZONE, UTC_OFFSET } from "./config.ts";
+import { hoursToPay, LEGAL_DEFAULTS } from "./payroll-co.ts";
 
 export type DaySchedule = { startMin: number; endMin: number; breakMin: number };
 
@@ -19,13 +20,20 @@ export type MonthPayroll = {
   extraDayHours: number;
   extraNightHours: number;
   extraHolidayHours: number;
+  surchargeHours: number;
   hourlyRate: number;
+  /** Sueldo base del contrato: solo referencia, no es parte de `totalValue`. */
   ordinaryValue: number;
+  surchargeValue: number;
   extraDayValue: number;
   extraNightValue: number;
   extraHolidayValue: number;
+  absenceDays: number;
+  absenceDiscount: number;
+  /** Recargos y extras menos el descuento por ausencias injustificadas. */
   totalValue: number;
   weeklyHours: Record<string, number>;
+  byCategory: { hours: Record<string, number>; values: Record<string, number> };
 };
 
 export function hmToMin(hm: string) {
@@ -171,77 +179,70 @@ function plannedMinFor(day: string, scheduleFor: (d: string) => DaySchedule | nu
   return planned;
 }
 
-/** Resumen mensual por trabajador: horas ordinarias y extra por tipo, más valores. */
+/** Duración pagada de la jornada que empieza en `day` (un turno nocturno se cuenta completo ese día). */
+function shiftMinFor(day: string, scheduleFor: (d: string) => DaySchedule | null): number {
+  const sched = scheduleFor(day);
+  if (!sched) return 0;
+  const span = sched.endMin > sched.startMin ? sched.endMin - sched.startMin : 1440 - sched.startMin + sched.endMin;
+  return Math.max(0, span - sched.breakMin);
+}
+
+/** Resumen mensual por trabajador: horas por categoría y lo que el registro agrega o quita al sueldo. */
 export function summarizeMonth(input: {
   month: string;
   punches: Punch[];
   scheduleFor: (day: string) => DaySchedule | null;
   contract: { monthlySalary: number; weeklyHours: number } | null;
   cfg: PayCfg;
+  unjustifiedAbsenceDays?: number;
 }): MonthPayroll {
   const { month, cfg, scheduleFor } = input;
   const intervals = cappedIntervals(workedIntervals(input.punches), scheduleFor);
-  const rate =
-    input.contract && input.contract.weeklyHours > 0
-      ? input.contract.monthlySalary / (input.contract.weeklyHours * 4.33)
-      : 0;
-  const acc: MonthPayroll = {
-    workedHours: 0,
-    ordinaryHours: 0,
-    extraDayHours: 0,
-    extraNightHours: 0,
-    extraHolidayHours: 0,
-    hourlyRate: rate,
-    ordinaryValue: 0,
-    extraDayValue: 0,
-    extraNightValue: 0,
-    extraHolidayValue: 0,
-    totalValue: 0,
-    weeklyHours: {},
-  };
-  for (const day of daysOfMonth(month)) {
-    const { workedMin, endSec } = dayTotals(day, intervals);
-    if (workedMin <= 0) continue;
-    const planned = plannedMinFor(day, scheduleFor);
-    const extraMin = Math.max(0, workedMin - planned);
-    const ordinaryMin = workedMin - extraMin;
-    let nightMin = 0;
-    let holidayMin = 0;
-    if (extraMin > 0) {
-      if (cfg.holidays.includes(day)) {
-        holidayMin = extraMin;
-      } else {
-        const segStart = (endSec - extraMin * 60) / 60;
-        const segEnd = endSec / 60;
-        nightMin = nightMinutes(segStart, segEnd, cfg.nightStartMin, cfg.nightEndMin);
-      }
-    }
-    const dayExtra = extraMin - nightMin - holidayMin;
-    acc.workedHours += workedMin / 60;
-    acc.ordinaryHours += ordinaryMin / 60;
-    acc.extraDayHours += dayExtra / 60;
-    acc.extraNightHours += nightMin / 60;
-    acc.extraHolidayHours += holidayMin / 60;
+  const pay = hoursToPay(
+    {
+      month,
+      intervals,
+      plannedMinFor: (day) => shiftMinFor(day, scheduleFor),
+      monthlySalary: input.contract?.monthlySalary ?? 0,
+      weeklyHours: input.contract?.weeklyHours ?? 0,
+      unjustifiedAbsenceDays: input.unjustifiedAbsenceDays,
+    },
+    {
+      ...LEGAL_DEFAULTS,
+      extraDiurna: Math.max(0, cfg.multDay - 1),
+      extraNocturna: Math.max(0, cfg.multNight - 1),
+      nocturnaInicio: [{ from: "0000-01-01", value: cfg.nightStartMin }],
+      nocturnaFin: cfg.nightEndMin,
+      extraHolidays: cfg.holidays,
+      offsetMin: -300,
+    },
+  );
+  const weeklyHours: Record<string, number> = {};
+  for (const [day, min] of Object.entries(pay.minutesByDay)) {
     const wk = weekKey(day);
-    acc.weeklyHours[wk] = (acc.weeklyHours[wk] || 0) + workedMin / 60;
+    weeklyHours[wk] = Math.round(((weeklyHours[wk] || 0) + min / 60) * 100) / 100;
   }
-  acc.ordinaryValue = round2(acc.ordinaryHours * rate);
-  acc.extraDayValue = round2(acc.extraDayHours * rate * cfg.multDay);
-  acc.extraNightValue = round2(acc.extraNightHours * rate * cfg.multNight);
-  acc.extraHolidayValue = round2(acc.extraHolidayHours * rate * cfg.multHoliday);
-  acc.totalValue = round2(acc.ordinaryValue + acc.extraDayValue + acc.extraNightValue + acc.extraHolidayValue);
-  for (const k of [
-    "workedHours",
-    "ordinaryHours",
-    "extraDayHours",
-    "extraNightHours",
-    "extraHolidayHours",
-  ] as const) {
-    acc[k] = Math.round(acc[k] * 100) / 100;
-  }
-  return acc;
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
+  const h = pay.hours;
+  const v = pay.values;
+  const sum = (o: Record<string, number>, keys: string[]) => keys.reduce((s, k) => s + o[k], 0);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    workedHours: pay.workedHours,
+    ordinaryHours: r2(sum(h, ["ord_dia", "ord_noche", "ord_dom_dia", "ord_dom_noche"])),
+    extraDayHours: h.ext_dia,
+    extraNightHours: h.ext_noche,
+    extraHolidayHours: r2(h.ext_dom_dia + h.ext_dom_noche),
+    surchargeHours: r2(sum(h, ["ord_noche", "ord_dom_dia", "ord_dom_noche"])),
+    hourlyRate: pay.hourlyRate,
+    ordinaryValue: pay.baseSalary,
+    surchargeValue: sum(v, ["ord_noche", "ord_dom_dia", "ord_dom_noche"]),
+    extraDayValue: v.ext_dia,
+    extraNightValue: v.ext_noche,
+    extraHolidayValue: v.ext_dom_dia + v.ext_dom_noche,
+    absenceDays: pay.absenceDays,
+    absenceDiscount: pay.absenceDiscount,
+    totalValue: pay.toPay,
+    weeklyHours,
+    byCategory: { hours: h, values: v },
+  };
 }

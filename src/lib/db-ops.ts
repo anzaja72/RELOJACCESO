@@ -770,6 +770,7 @@ export function reportDashboard(input: {
         ? { monthlySalary: Number(contract.monthly_salary), weeklyHours: Number(contract.weekly_hours) }
         : null,
       cfg,
+      unjustifiedAbsenceDays: perEmp.get(e.id)?.unjustified ?? 0,
     });
     return {
       employeeId: e.id,

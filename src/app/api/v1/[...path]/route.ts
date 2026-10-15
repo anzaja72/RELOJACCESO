@@ -111,7 +111,7 @@ function actorOrThrow(request: Request) {
 }
 
 /** Sueldos y valores: gerentes y auditor. El operador ve horas, no dinero. */
-const MONEY_FIELDS = ["hourlyRate", "ordinaryValue", "extraDayValue", "extraNightValue", "extraHolidayValue", "totalValue"];
+const MONEY_FIELDS = ["hourlyRate", "ordinaryValue", "extraDayValue", "extraNightValue", "extraHolidayValue", "surchargeValue", "absenceDiscount", "totalValue"];
 function redactMoney(row: Record<string, unknown>) {
   const out: Record<string, unknown> = { ...row, hasContract: null };
   for (const k of MONEY_FIELDS) out[k] = null;

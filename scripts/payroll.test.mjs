@@ -79,11 +79,11 @@ assert.equal(daysOfMonth("2026-10").length, 31);
   assert.equal(r.extraDayHours, 2);
   assert.equal(r.extraNightHours, 0);
   assert.equal(r.extraHolidayHours, 0);
-  const rate = 2_000_000 / (48 * 4.33);
+  const rate = 2_000_000 / (48 * 5); // valor hora = sueldo / (horas semanales × 5)
   assert.ok(Math.abs(r.hourlyRate - rate) < 0.01);
-  assert.ok(Math.abs(r.ordinaryValue - 8 * rate) < 0.01);
-  assert.ok(Math.abs(r.extraDayValue - 2 * rate * 1.25) < 0.01);
-  assert.equal(r.totalValue, r.ordinaryValue + r.extraDayValue + r.extraNightValue + r.extraHolidayValue);
+  assert.equal(r.ordinaryValue, 2_000_000); // sueldo base: referencia, no suma al total
+  assert.ok(Math.abs(r.extraDayValue - 2 * rate * 1.25) < 1);
+  assert.equal(r.totalValue, r.surchargeValue + r.extraDayValue + r.extraNightValue + r.extraHolidayValue);
   assert.ok(Object.keys(r.weeklyHours).length >= 1);
 }
 
@@ -122,7 +122,7 @@ assert.equal(daysOfMonth("2026-10").length, 31);
 }
 
 // 7) Turno nocturno cruza medianoche: dos noches 22:00→06:00 con pausa planificada de 60
-//    Día con ambas partes trabajadas: plan = continuación(360) + inicio(60) = 420; trabajado 480 → extra 60 nocturnas
+//    Cada turno cuenta en el día en que empieza: 480 min trabajados vs 420 pagados → 60 min extra por turno
 {
   const punches = [
     p("IN", `2026-10-04T22:00:00${B}`),
@@ -138,8 +138,8 @@ assert.equal(daysOfMonth("2026-10").length, 31);
     cfg,
   });
   assert.ok(Math.abs(r.workedHours - 16) < 0.02, `worked ${r.workedHours}`);
-  assert.ok(Math.abs(r.extraNightHours - 1) < 0.02, `night ${r.extraNightHours}`);
-  assert.ok(Math.abs(r.ordinaryHours - 15) < 0.02, `ordinary ${r.ordinaryHours}`);
+  assert.ok(Math.abs(r.extraNightHours - 2) < 0.02, `night ${r.extraNightHours}`);
+  assert.ok(Math.abs(r.ordinaryHours - 14) < 0.02, `ordinary ${r.ordinaryHours}`);
 }
 
 // 8) Punch no identificado se ignora
