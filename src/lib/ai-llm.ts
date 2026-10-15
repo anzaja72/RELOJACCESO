@@ -38,7 +38,7 @@ export function llmInfo(): LlmInfo {
   return { provider: "none", model: null };
 }
 
-export async function llmComplete(system: string, user: string): Promise<string | null> {
+export async function llmComplete(system: string, user: string, noThinking = false): Promise<string | null> {
   const info = llmInfo();
   if (info.provider === "none") return null;
   const timeoutMs = Number(process.env.LLM_TIMEOUT_MS || (info.provider === "nvidia" ? "90000" : "12000"));
@@ -80,7 +80,7 @@ export async function llmComplete(system: string, user: string): Promise<string 
         : process.env.OPENAI_API_KEY || "";
     if (!key) return null;
 
-    const thinking = process.env.LLM_ENABLE_THINKING !== "0";
+    const thinking = process.env.LLM_ENABLE_THINKING !== "0" && !noThinking;
     const payload = nvidia
       ? {
           model: info.model,
@@ -120,11 +120,12 @@ export async function llmComplete(system: string, user: string): Promise<string 
       choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
     };
     const content = data.choices?.[0]?.message?.content;
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      return content.map((p) => p.text || "").join("\n").trim() || null;
-    }
-    return null;
+    let text: string | null = null;
+    if (typeof content === "string") text = content.trim() || null;
+    else if (Array.isArray(content)) text = content.map((p) => p.text || "").join("\n").trim() || null;
+    // Un modelo que razona puede gastar todo el cupo pensando y dejar la respuesta vacía.
+    if (!text && nvidia && thinking) return llmComplete(system, user, true);
+    return text;
   } catch (err) {
     console.warn(`[llm] ${info.provider} falló: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
     return null;

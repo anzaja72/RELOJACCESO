@@ -220,7 +220,42 @@ export async function answerChat(input: {
   const data = retrieve(intent, day, input.siteId, input.scope, input.countryId, input.zoneId);
   const fallback = canned(intent, day, input.siteId, data);
   const info = llmInfo();
-  if (info.provider === "none" || intent === "unknown") return fallback;
+  if (info.provider === "none") return fallback;
+  if (intent === "unknown") {
+    // Pregunta libre: se responde con un resumen del día en vez de rechazarla.
+    const report = reportForDay({
+      day,
+      siteId: input.siteId,
+      scope: input.scope,
+      countryId: input.countryId,
+      zoneId: input.zoneId,
+    });
+    const byStatus: Record<string, number> = {};
+    for (const r of report.rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+    const pick = (status: string) =>
+      report.rows
+        .filter((r) => r.status === status)
+        .slice(0, 25)
+        .map((r) => ({ employeeId: r.employee.id, name: r.employee.name }));
+    const free = await llmComplete(
+      `Eres "IAnálisis de Reloj CR". Respondes en español, breve, solo con los hechos dados sobre asistencia del día. Cita ids reales (employee). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
+      `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
+        day,
+        siteId: input.siteId ?? null,
+        totalesPorEstado: byStatus,
+        atrasados: pick("late"),
+        ausentes: pick("absent"),
+      })}`,
+    );
+    if (!free) return fallback;
+    return {
+      answer: free,
+      intent,
+      cites: [],
+      source: "llm",
+      missing: free.includes("[NO ENCONTRADO]"),
+    };
+  }
   const raw = await llmComplete(
     `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
     `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
