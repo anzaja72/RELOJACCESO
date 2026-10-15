@@ -4,6 +4,7 @@ import { listPunches } from "@/lib/db";
 import {
   listCorrections,
   listEmployeesScoped,
+  reportDashboard,
   reportForDay,
   siteIdsForRegion,
   siteIdsForScope,
@@ -229,62 +230,110 @@ export async function answerChat(input: {
   const fallback = canned(intent, day, input.siteId, data);
   const info = llmInfo();
   if (info.provider === "none") return fallback;
-  if (intent === "unknown") {
-    // Pregunta libre: se responde con un resumen del día en vez de rechazarla.
-    const report = reportForDay({
-      day,
-      siteId: input.siteId,
-      scope: input.scope,
-      countryId: input.countryId,
-      zoneId: input.zoneId,
-    });
-    const sites = new Map(listSites().map((x) => [x.id, `${x.code} ${x.name}`]));
-    const byStatus: Record<string, number> = {};
-    for (const r of report.rows) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
-    const pick = (status: string) =>
-      report.rows
-        .filter((r) => r.status === status)
-        .slice(0, 25)
-        .map((r) => ({ employeeId: r.employee.id, name: r.employee.name, site: sites.get(r.employee.siteId) ?? r.employee.siteId }));
-    const free = await llmComplete(
-      `Eres "IAnálisis de Reloj CR". Respondes en español, breve, solo con los hechos dados sobre asistencia del día. Cita ids reales (employee). Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
-      `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
-        day,
-        siteId: input.siteId ?? null,
-        totalesPorEstado: byStatus,
-        atrasados: pick("late"),
-        ausentes: pick("absent"),
-      })}`,
-    );
-    if (!free) return fallback;
-    return {
-      answer: free,
-      intent,
-      cites: [],
-      source: "llm",
-      missing: free.includes("[NO ENCONTRADO]"),
-    };
-  }
+  // Análisis: el modelo recibe el día y el acumulado del mes ya consolidados (tasas, rankings,
+  // comparativos); él los interpreta y redacta, no hace las cuentas.
+  const facts = analysisFacts(input, day, data);
   const raw = await llmComplete(
-    `Eres "IAnálisis de Reloj CR". Solo hablas de presentes, atrasos, ausencias, terminales, sync y correcciones. Español. Cita ids reales del JSON (punch/employee/terminal). Cada fila trae su sede en el campo site (p. ej. R01): si la pregunta nombra una sede, usa solo las filas de esa sede; si hay filas pero ninguna es de esa sede, dilo. Si el dato no está, responde exactamente [NO ENCONTRADO]. Prohibido inventar. Prohibido aconsejar sanciones o despidos.`,
-    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify({
-      day,
-      siteId: input.siteId ?? null,
-      countryId: input.countryId ?? null,
-      zoneId: input.zoneId ?? null,
-      intent,
-      data,
-    })}`,
+    `Eres "IAnálisis de Reloj CR", analista de asistencia para gerentes de restaurantes. Responde en español, con el siguiente formato de texto plano (sin markdown, sin asteriscos ni almohadillas; usa "•" para viñetas):
+
+Resumen: una o dos frases con la conclusión y la cifra clave.
+Hallazgos: 3 a 5 viñetas con números concretos (conteos, porcentajes, minutos, comparaciones entre sedes, personas o días).
+Dónde se concentra: qué sede, día o personas explican la mayor parte del problema.
+Qué vigilar: 1 a 3 acciones operativas (ajustar turnos, reforzar una sede, revisar un horario, confirmar una excepción).
+
+Reglas: usa SOLO los hechos dados; nómbralos por nombre y sede, no por id; cuando el periodo pedido (p. ej. "este mes") esté en los hechos, úsalo y di el periodo; si falta un dato, dilo en una línea y analiza lo que sí hay. Prohibido inventar cifras. Prohibido aconsejar sanciones, despidos o temas legales; habla de la operación, no de castigar personas. Máximo 220 palabras.`,
+    `Pregunta: ${input.question}\nHechos:\n${JSON.stringify(facts)}`,
   );
   if (!raw) return fallback;
-  // Con datos disponibles, una negativa del modelo es peor que la lista directa.
-  if (raw.includes("[NO ENCONTRADO]") && (data.rows as unknown[]).length > 0) return fallback;
   return {
-    answer: raw,
+    answer: raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, ""),
     intent,
     cites: fallback.cites,
     source: "llm",
-    missing: raw.includes("[NO ENCONTRADO]"),
+    missing: raw.includes("[NO ENCONTRADO]") && (data.rows as unknown[]).length === 0,
+  };
+}
+
+/** Hechos consolidados para el análisis: día consultado + acumulado del mes, con tasas y rankings. */
+function analysisFacts(
+  input: { siteId?: string; countryId?: string; zoneId?: string; scope?: Scope },
+  day: string,
+  data: { label: string; rows: unknown[] },
+) {
+  const month = day.slice(0, 7);
+  const dash = reportDashboard({
+    month,
+    siteId: input.siteId,
+    countryId: input.countryId,
+    zoneId: input.zoneId,
+    scope: input.scope,
+  });
+  const siteLabel = new Map(listSites().map((x) => [x.id, `${x.code} ${x.name}`]));
+  const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
+  const t = dash.totals;
+  const registered = t.present + t.absent;
+  const people = (dash.people as Array<{
+    employee: { id: string; name: string; siteId: string };
+    presentDays: number;
+    lateDays: number;
+    lateMin: number;
+    avgLateMin: number;
+    unjustified: number;
+  }>).map((p) => ({
+    nombre: p.employee.name,
+    sede: siteLabel.get(p.employee.siteId) ?? p.employee.siteId,
+    diasPresente: p.presentDays,
+    diasTarde: p.lateDays,
+    minutosTardeTotal: p.lateMin,
+    minutosTardePromedio: p.avgLateMin,
+    faltasInjustificadas: p.unjustified,
+  }));
+  const top = <T,>(rows: T[], key: (r: T) => number, n = 8) =>
+    [...rows].sort((a, b) => key(b) - key(a)).filter((r) => key(r) > 0).slice(0, n);
+  const series = dash.series as Array<{ day: string; present: number; absent: number; late: number }>;
+  const byDay = series.map((s) => ({ dia: s.day, presentes: s.present, ausentes: s.absent, tarde: s.late }));
+  const busiest = top(byDay, (r) => r.tarde, 3);
+  const payroll = dash.payroll as Array<{ name: string; siteName: string; workedHours: number; extraDayHours: number; extraNightHours: number; extraHolidayHours: number }>;
+  const extraOf = (p: (typeof payroll)[number]) => p.extraDayHours + p.extraNightHours + p.extraHolidayHours;
+  return {
+    diaConsultado: day,
+    mes: month,
+    diasTranscurridosDelMes: series.length,
+    trabajadoresEnAlcance: people.length,
+    trabajadoresDistintosQueLlegaronTardeEnElMes: people.filter((p) => p.diasTarde > 0).length,
+    trabajadoresConFaltasInjustificadasEnElMes: people.filter((p) => p.faltasInjustificadas > 0).length,
+    acumuladoMes: {
+      marcacionesDiaPersona: registered,
+      presentes: t.present,
+      ausentes: t.absent,
+      tarde: t.late,
+      salidasAnticipadas: t.earlyOut,
+      omisiones: t.omission,
+      porcentajeTardeSobrePresentes: pct(t.late, t.present),
+      porcentajeAusentesSobreRegistros: pct(t.absent, registered),
+      promedioTardeAlDia: series.length ? Math.round((t.late / series.length) * 10) / 10 : 0,
+    },
+    diasConMasTarde: busiest,
+    serieDiaria: byDay.slice(-31),
+    porSede: (dash.sites as Array<{ name: string; presentDays: number; lateDays: number; lateMin: number; avgLateMin: number }>).map((s) => ({
+      sede: s.name,
+      diasPresente: s.presentDays,
+      diasTarde: s.lateDays,
+      porcentajeTarde: pct(s.lateDays, s.presentDays),
+      minutosTardePromedio: s.avgLateMin,
+    })),
+    personasConMasTarde: top(people, (p) => p.diasTarde),
+    personasConMasFaltasInjustificadas: top(people, (p) => p.faltasInjustificadas),
+    horasExtraDelMes: {
+      total: Math.round(payroll.reduce((s, p) => s + extraOf(p), 0) * 10) / 10,
+      personasConMasHorasExtra: top(payroll, extraOf, 5).map((p) => ({
+        nombre: p.name,
+        sede: p.siteName,
+        horasExtra: Math.round(extraOf(p) * 10) / 10,
+        horasTrabajadas: p.workedHours,
+      })),
+    },
+    detalleDelDia: { tipo: data.label, filas: (data.rows as unknown[]).slice(0, 40) },
   };
 }
 

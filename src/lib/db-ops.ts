@@ -837,6 +837,8 @@ export function reportDashboard(input: {
       mostPunctualSite: sitesByPunct[0] ?? null,
     },
     payroll,
+    people: [...perEmp.values()],
+    sites: sitesByPunct,
     params: {
       maxWeeklyHours: maxWeekly,
       absenceThreshold: absThreshold,
