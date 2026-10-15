@@ -12,6 +12,7 @@ import {
   type Scope,
 } from "@/lib/db-ops";
 import { listAnomalies } from "@/lib/anomalies";
+import { extractWidgets, type Widget } from "@/lib/ai-widgets";
 import { listSites, listTerminals } from "@/lib/db";
 import { dayBoundsUtc } from "@/lib/config";
 
@@ -22,6 +23,7 @@ export type ChatAnswer = {
   cites: ChatCite[];
   source: "llm" | "canned";
   missing: boolean;
+  widgets?: Widget[];
 };
 
 const REFUSE =
@@ -241,16 +243,27 @@ Hallazgos: 3 a 5 viñetas con números concretos (conteos, porcentajes, minutos,
 Dónde se concentra: qué sede, día o personas explican la mayor parte del problema.
 Qué vigilar: 1 a 3 acciones operativas (ajustar turnos, reforzar una sede, revisar un horario, confirmar una excepción).
 
-Reglas: usa SOLO los hechos dados; nómbralos por nombre y sede, no por id; cuando el periodo pedido (p. ej. "este mes") esté en los hechos, úsalo y di el periodo; si falta un dato, dilo en una línea y analiza lo que sí hay. Prohibido inventar cifras. Prohibido aconsejar sanciones, despidos o temas legales; habla de la operación, no de castigar personas. Máximo 220 palabras.`,
+Reglas: usa SOLO los hechos dados; nómbralos por nombre y sede, no por id; cuando el periodo pedido (p. ej. "este mes") esté en los hechos, úsalo y di el periodo; si falta un dato, dilo en una línea y analiza lo que sí hay. Prohibido inventar cifras. Prohibido aconsejar sanciones, despidos o temas legales; habla de la operación, no de castigar personas. Máximo 220 palabras.
+
+Además del texto, cuando haya cifras que comparar o una serie que mostrar, incluye de 1 a 3 bloques <ui-widget>{...}</ui-widget> con JSON válido en una sola línea, sin bloques de código markdown alrededor. Tipos disponibles (type):
+• kpi_cards: items [{label, value (texto corto, p. ej. "155" o "17,3 %"), hint, tone: neutral|good|warn|bad}]
+• bar_chart: title, unit, items [{label, value}] (comparar sedes, personas o categorías)
+• line_chart: title, unit, points [{label, value}] (evolución diaria; mínimo 2 puntos)
+• ranking: title, unit, items [{label, detail, value}] (personas o sedes ordenadas)
+• comparison_table: title, columns [texto], rows [[texto, ...]] (cada fila con tantas celdas como columnas)
+Usa solo cifras de los hechos. No repitas en el texto lo que ya muestra el bloque; el texto da la lectura, el bloque da los números.`,
     `Pregunta: ${input.question}\nHechos:\n${JSON.stringify(facts)}`,
   );
   if (!raw) return fallback;
+  const { text, widgets } = extractWidgets(raw);
+  if (!text && widgets.length === 0) return fallback;
   return {
-    answer: raw.replace(/\*\*/g, "").replace(/^#+\s*/gm, ""),
+    answer: text.replace(/\*\*/g, "").replace(/^#+\s*/gm, ""),
     intent,
     cites: fallback.cites,
     source: "llm",
     missing: raw.includes("[NO ENCONTRADO]") && (data.rows as unknown[]).length === 0,
+    widgets,
   };
 }
 

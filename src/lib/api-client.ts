@@ -1,3 +1,4 @@
+import type { Widget } from "@/lib/ai-widgets";
 import { clearSession, getToken } from "@/lib/client-session";
 import { clearTerminal, getTerminal } from "@/lib/terminal";
 import type {
@@ -322,6 +323,7 @@ export const api = {
       cites: Array<{ type: string; id: string }>;
       source: string;
       missing: boolean;
+      widgets?: Widget[];
     }>("/api/v1/ai/chat", { method: "POST", admin: true, body: JSON.stringify(body) }),
   anomalies: (qs = "") =>
     request<{ anomalies: Array<{

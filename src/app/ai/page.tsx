@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AiWidgets } from "@/components/ai-widgets";
 import { api } from "@/lib/api-client";
+import type { Widget } from "@/lib/ai-widgets";
 import type { Site } from "@/lib/types";
 
 const HINTS = [
@@ -26,7 +28,7 @@ export default function AiPage() {
   const [zoneId, setZoneId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [question, setQuestion] = useState(HINTS[0]);
-  const [log, setLog] = useState<Array<{ q: string; a: string; cites: string; source: string }>>([]);
+  const [log, setLog] = useState<Array<{ q: string; a: string; cites: string; source: string; widgets: Widget[] }>>([]);
   const [briefing, setBriefing] = useState<Array<{ text: string; href: string }>>([]);
   const [briefMeta, setBriefMeta] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export default function AiPage() {
           a: res.answer,
           cites: res.cites.map((c) => `${c.type}:${c.id}`).join(" · "),
           source: res.source,
+          widgets: res.widgets ?? [],
         },
         ...prev,
       ]);
@@ -166,6 +169,7 @@ export default function AiPage() {
             <div key={`${item.q}-${i}`} className="row" style={{ padding: "14px 0" }}>
               <strong>{item.q}</strong>
               <span style={{ whiteSpace: "pre-wrap" }}>{item.a}</span>
+              <AiWidgets widgets={item.widgets} />
               {item.cites ? <span>Citas: {item.cites}</span> : null}
               <span className="pill" style={{ marginTop: 8 }}>{item.source}</span>
             </div>
