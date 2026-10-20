@@ -41,7 +41,7 @@ export function llmInfo(): LlmInfo {
 export async function llmComplete(system: string, user: string, noThinking = false): Promise<string | null> {
   const info = llmInfo();
   if (info.provider === "none") return null;
-  const timeoutMs = Number(process.env.LLM_TIMEOUT_MS || (info.provider === "nvidia" ? "90000" : "12000"));
+  const timeoutMs = Number(process.env.LLM_TIMEOUT_MS || (info.provider === "nvidia" ? "45000" : "12000"));
   try {
     if (info.provider === "anthropic") {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -86,13 +86,17 @@ export async function llmComplete(system: string, user: string, noThinking = fal
           model: info.model,
           temperature: Number(process.env.LLM_TEMPERATURE || "0.2"),
           top_p: Number(process.env.LLM_TOP_P || "0.95"),
-          max_tokens: Number(process.env.LLM_MAX_TOKENS || "2048"),
+          // Con razonamiento hace falta más cupo: el modelo gasta tokens pensando antes de responder.
+          max_tokens: Number(process.env.LLM_MAX_TOKENS || (thinking ? "4096" : "1500")),
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
           ],
           chat_template_kwargs: { enable_thinking: thinking },
-          reasoning_budget: Number(process.env.LLM_REASONING_BUDGET || "4096"),
+          // Solo si se define: un presupuesto mayor que max_tokens hace fallar al modelo.
+          ...(thinking && process.env.LLM_REASONING_BUDGET
+            ? { reasoning_budget: Number(process.env.LLM_REASONING_BUDGET) }
+            : {}),
         }
       : {
           model: info.model,
@@ -114,6 +118,8 @@ export async function llmComplete(system: string, user: string, noThinking = fal
     });
     if (!res.ok) {
       console.warn(`[llm] ${info.provider} respondió HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      // Un error del servidor con razonamiento activo suele resolverse sin él.
+      if (nvidia && thinking) return llmComplete(system, user, true);
       return null;
     }
     const data = (await res.json()) as {
@@ -128,6 +134,9 @@ export async function llmComplete(system: string, user: string, noThinking = fal
     return text;
   } catch (err) {
     console.warn(`[llm] ${info.provider} falló: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+    if (info.provider === "nvidia" && !noThinking && process.env.LLM_ENABLE_THINKING !== "0") {
+      return llmComplete(system, user, true);
+    }
     return null;
   }
 }
