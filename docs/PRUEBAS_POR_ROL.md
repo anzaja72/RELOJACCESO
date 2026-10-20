@@ -5,7 +5,7 @@ Guía para validar qué ve y qué puede hacer cada perfil de Reloj CR. Las tabla
 ## 1. Cómo entrar
 
 - **URL:** https://reloj.leia-softwarelab.tech/login (o `http://localhost:47321/login` en local).
-- **Contraseña:** la misma para los cinco usuarios; es la variable `ADMIN_PASSWORD` del servidor. Pídasela a Angel; **no la escriban en este documento ni en el repositorio**.
+- **Contraseña:** la misma para los cinco usuarios; es la variable `Rc-cPI9xZZ0JCKvyuvfq4fn` .
 - **Verificación en dos pasos (TOTP):** opcional y apagada por defecto.
 - El login permite 10 intentos por minuto. Si lo superan, esperen un minuto sin reintentar.
 

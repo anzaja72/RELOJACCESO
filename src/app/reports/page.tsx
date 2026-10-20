@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -77,7 +78,8 @@ type Dash = {
 };
 
 // Colores con significado fijo (tarde = ámbar, ausente = rojo) y neutros que siguen el tema del cliente.
-const DONUT_COLORS = ["var(--ink-2)", "#f59e0b", "#e11d48", "var(--ink-4)", "#7c3aed"];
+const DONUT_COLORS = ["var(--foreground)", "#f59e0b", "#e11d48", "var(--ink-4)", "#7c3aed"];
+const PAGE = 8;
 
 function num(n: number, digits = 0) {
   return n.toLocaleString(LOCALE, { maximumFractionDigits: digits });
@@ -112,6 +114,7 @@ function ReportsPage() {
   const [exType, setExType] = useState("justified");
   const [briefing, setBriefing] = useState<Array<{ text: string; href: string }>>([]);
   const [briefMeta, setBriefMeta] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   const visibleZones = useMemo(
     () => zones.filter((z) => !countryId || z.country_id === countryId),
@@ -176,6 +179,7 @@ function ReportsPage() {
       qs.set("month", month);
       const d = (await api.dashboard(qs.toString())) as Dash;
       setDash(d);
+      setPage(0);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el panel");
@@ -240,54 +244,74 @@ function ReportsPage() {
     <AppShell
       title="Reportes"
       meta={`Presentes ${totals.present ?? 0} · ausentes ${totals.absent ?? 0} · tardes ${totals.late ?? 0} · omisiones ${totals.omission ?? 0}`}
-      actions={
-        <>
-          <select className="native-select" value={countryId} onChange={(e) => { setCountryId(e.target.value); setZoneId(""); pushQuery({ country: e.target.value, zone: "" }); }}>
-            <option value="">País</option>
-            {countries.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select className="native-select" value={zoneId} onChange={(e) => { setZoneId(e.target.value); pushQuery({ zone: e.target.value }); }}>
-            <option value="">Zona</option>
-            {visibleZones.map((z) => (
-              <option key={z.id} value={z.id}>{z.name}</option>
-            ))}
-          </select>
-          <select className="native-select" value={siteId} onChange={(e) => { setSiteId(e.target.value); pushQuery({ site: e.target.value }); }}>
-            <option value="">Sede</option>
-            {visibleSites.map((s) => (
-              <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
-            ))}
-          </select>
-          <select className="native-select" value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); pushQuery({ employee: e.target.value }); }}>
-            <option value="">Colaborador</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
-          <Input type="date" value={day} onChange={(e) => { setDay(e.target.value); pushQuery({ day: e.target.value }); }} />
-          <Input
-            type="month"
-            value={month}
-            title="Mes del panel"
-            onChange={(e) => { setMonth(e.target.value); pushQuery({ month: e.target.value }); }}
-          />
-          <select className="native-select" value={status} onChange={(e) => { setStatus(e.target.value); pushQuery({ status: e.target.value }); }}>
-            <option value="">Estado</option>
-            <option value="present">Presente</option>
-            <option value="late">Tarde</option>
-            <option value="absent">Ausente</option>
-            <option value="early_out">Salida temprana</option>
-            <option value="omission">Omisión</option>
-          </select>
-          <Button className="shade" onClick={() => void makeBriefing()}>Generar briefing del día</Button>
-          <Button className="shade" onClick={() => void download("xlsx")}>XLSX</Button>
-          <Button variant="outline" className="shade" onClick={() => void download("csv")}>CSV</Button>
-          <Button variant="outline" className="shade" onClick={() => void download("pdf")}>PDF</Button>
-        </>
-      }
     >
+      <div className="filter-card">
+        <div className="filter-grid">
+          <label className="filter-field">
+            <span>País</span>
+            <select className="native-select" value={countryId} onChange={(e) => { setCountryId(e.target.value); setZoneId(""); pushQuery({ country: e.target.value, zone: "" }); }}>
+              <option value="">Todos</option>
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Zona</span>
+            <select className="native-select" value={zoneId} onChange={(e) => { setZoneId(e.target.value); pushQuery({ zone: e.target.value }); }}>
+              <option value="">Todas</option>
+              {visibleZones.map((z) => (
+                <option key={z.id} value={z.id}>{z.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Sede</span>
+            <select className="native-select" value={siteId} onChange={(e) => { setSiteId(e.target.value); pushQuery({ site: e.target.value }); }}>
+              <option value="">Todas</option>
+              {visibleSites.map((s) => (
+                <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Colaborador</span>
+            <select className="native-select" value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); pushQuery({ employee: e.target.value }); }}>
+              <option value="">Todos los colaboradores</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Día</span>
+            <Input type="date" value={day} onChange={(e) => { setDay(e.target.value); pushQuery({ day: e.target.value }); }} />
+          </label>
+          <label className="filter-field">
+            <span>Mes del panel</span>
+            <Input type="month" value={month} onChange={(e) => { setMonth(e.target.value); pushQuery({ month: e.target.value }); }} />
+          </label>
+        </div>
+        <div className="filter-row">
+          <label className="filter-field" style={{ minWidth: 180 }}>
+            <span>Estado</span>
+            <select className="native-select" value={status} onChange={(e) => { setStatus(e.target.value); pushQuery({ status: e.target.value }); }}>
+              <option value="">Todos</option>
+              <option value="present">Presente</option>
+              <option value="late">Tarde</option>
+              <option value="absent">Ausente</option>
+              <option value="early_out">Salida temprana</option>
+              <option value="omission">Omisión</option>
+            </select>
+          </label>
+          <div className="filter-actions">
+            <Button variant="outline" className="shade" onClick={() => void makeBriefing()}>Generar briefing del día</Button>
+            <Button className="shade" onClick={() => void download("xlsx")}>XLSX</Button>
+            <Button variant="outline" className="shade" onClick={() => void download("csv")}>CSV</Button>
+            <Button variant="outline" className="shade" onClick={() => void download("pdf")}>PDF</Button>
+          </div>
+        </div>
+      </div>
       {error && <p className="err-text" style={{ padding: 16 }}>{error}</p>}
       {briefing.length > 0 && (
         <div className="detail" style={{ borderBottom: "1px solid var(--border-soft)" }}>
@@ -303,27 +327,25 @@ function ReportsPage() {
         </div>
       )}
       {dash && (
-        <div className="detail" style={{ borderBottom: "1px solid var(--border-soft)", paddingBottom: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div className="panel">
+          <div className="panel-head">
             <h2>Panel {dash.month}</h2>
             <span className="muted">
               {dash.days} días · extras ×{dash.params.multipliers.day} diurna, ×{dash.params.multipliers.night} nocturna, ×
-              {dash.params.multipliers.holiday} festiva · máx. {dash.params.maxWeeklyHours} h/semana
+              {dash.params.multipliers.holiday} festiva · <strong>máx. {dash.params.maxWeeklyHours} h/semana</strong>
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginTop: 14 }}>
+          <div className="kpi-row">
             {[
               ["Presentes", dash.totals.present, "var(--foreground)"],
-              ["Ausentes", dash.totals.absent, "var(--ink-3)"],
+              ["Ausentes", dash.totals.absent, "var(--foreground)"],
               ["Tardes", dash.totals.late, "#e11d48"],
               ["Omisiones", dash.totals.omission, "#7c3aed"],
             ].map(([label, value, color]) => (
-              <div key={String(label)} style={{ background: "var(--card)", border: "1px solid var(--border-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em", color: String(color) }}>{num(Number(value))}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2 }}>
-                  {label}
-                </div>
+              <div key={String(label)} className="kpi-card">
+                <div className="kpi-label">{label}</div>
+                <div className="kpi-value" style={{ color: String(color) }}>{num(Number(value))}</div>
               </div>
             ))}
             {[
@@ -334,123 +356,151 @@ function ReportsPage() {
               ["Trabajador menos puntual", dash.kpis.leastPunctual ? dash.kpis.leastPunctual.employee?.name : null,
                 dash.kpis.leastPunctual ? `${num(dash.kpis.leastPunctual.avgLateMin, 1)} min de atraso promedio` : "—", "#b91c1c"],
             ].map(([label, name, sub, color]) => (
-              <div key={String(label)} style={{ background: "#fff", border: "1px solid var(--border-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {name ?? "—"}
-                </div>
-                <div style={{ fontSize: 11, color: String(color), marginTop: 3 }}>{sub}</div>
-                <div style={{ fontSize: 10.5, color: "#a3a3a3", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 6 }}>
-                  {label}
-                </div>
+              <div key={String(label)} className="kpi-card kpi-person">
+                <div className="kpi-name">{name ?? "—"}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: String(color), marginTop: 3 }}>{sub}</div>
+                <div className="kpi-label" style={{ marginTop: 10 }}>{label}</div>
               </div>
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 20 }}>
-            <div>
-              <h2 style={{ fontSize: 13, marginBottom: 8 }}>Estados del mes</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: "Puntuales", value: Math.max(0, dash.totals.present - dash.totals.late) },
-                      { name: "Tardes", value: dash.totals.late },
-                      { name: "Ausentes", value: dash.totals.absent },
-                      { name: "Salida temprana", value: dash.totals.earlyOut },
-                      { name: "Omisiones", value: dash.totals.omission },
-                    ]}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={48}
-                    outerRadius={82}
-                    paddingAngle={2}
-                    label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-                  >
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <Cell key={i} fill={DONUT_COLORS[i]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="chart-row">
+            <div className="chart-card">
+              <h3>Estados del mes</h3>
+              <div style={{ position: "relative" }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Puntuales", value: Math.max(0, dash.totals.present - dash.totals.late) },
+                        { name: "Tardes", value: dash.totals.late },
+                        { name: "Ausentes", value: dash.totals.absent },
+                        { name: "Salida temprana", value: dash.totals.earlyOut },
+                        { name: "Omisiones", value: dash.totals.omission },
+                      ]}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={62}
+                      outerRadius={92}
+                      paddingAngle={1}
+                      label={({ name, percent }) => ((percent ?? 0) >= 0.02 ? `${name} ${Math.round((percent ?? 0) * 100)}%` : "")}
+                      labelLine={{ strokeWidth: 1 }}
+                    >
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <Cell key={i} fill={DONUT_COLORS[i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="donut-center">
+                  <span>TOTAL</span>
+                  <strong>
+                    {num(dash.totals.present + dash.totals.absent + dash.totals.omission + dash.totals.earlyOut)}
+                  </strong>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 style={{ fontSize: 13, marginBottom: 8 }}>Diario (puntuales / ausentes / tardes)</h2>
-              <ResponsiveContainer width="100%" height={220}>
+            <div className="chart-card">
+              <h3>Diario (puntuales / ausentes / tardes)</h3>
+              <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={dash.series.map((s) => ({ ...s, dd: s.day.slice(8), onTime: Math.max(0, s.present - s.late) }))}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="dd" tick={{ fontSize: 10 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
                   <Tooltip />
-                  <Bar dataKey="onTime" name="Puntuales" stackId="a" fill="#171717" />
-                  <Bar dataKey="late" name="Tardes" stackId="a" fill="#e11d48" />
-                  <Bar dataKey="absent" name="Ausentes" stackId="a" fill="#d4d4d4" />
-                  <Bar dataKey="omission" name="Omisiones" stackId="a" fill="#7c3aed" />
+                  <Legend verticalAlign="top" align="right" iconType="square" wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="onTime" name="Puntual" stackId="a" fill="var(--foreground)" />
+                  <Bar dataKey="absent" name="Ausente" stackId="a" fill="#e11d48" />
+                  <Bar dataKey="late" name="Tarde" stackId="a" fill="#f59e0b" />
+                  <Bar dataKey="omission" name="Omisión" stackId="a" fill="#8b5cf6" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <h2 style={{ fontSize: 13, margin: "20px 0 8px" }}>
-            Horas y valores del mes · {dash.params.correctionWindowHours} h de plazo para correcciones · umbral de{" "}
-            {dash.params.absenceThreshold} faltas
-          </h2>
-          <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
-            Valor de los recargos y las horas extra según las marcaciones, menos las ausencias injustificadas. Se suma al sueldo base: no incluye seguridad social, incapacidades ni prestaciones, que liquida el sistema de nómina.
-          </p>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-              <thead>
-                <tr style={{ textAlign: "left", color: "var(--ink-4)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  <th style={{ padding: "6px 8px" }}>Colaborador</th>
-                  <th style={{ padding: "6px 8px" }}>Sede</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Trabajadas</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Ordinarias</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra diurna</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra noct.</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Extra fest.</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Valor hora</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Recargos y extras</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>Ausencias</th>
-                  <th style={{ padding: "6px 8px", textAlign: "right" }}>A pagar adicional</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dash.payroll.map((p) => (
-                  <tr key={p.employeeId} style={{ borderTop: "1px solid var(--border-soft)" }}>
-                    <td style={{ padding: "7px 8px", fontWeight: 600 }}>
-                      {p.name}
-                      {p.hasContract === false && <span className="pill warn" style={{ marginLeft: 6 }}>sin contrato</span>}
-                    </td>
-                    <td style={{ padding: "7px 8px", color: "var(--ink-4)" }}>{p.siteName}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.workedHours, 1)} h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.ordinaryHours, 1)} h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraDayHours, 1)} h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraNightHours, 1)} h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>{num(p.extraHolidayHours, 1)} h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
-                      {p.hasContract ? `$${num(p.hourlyRate)} ${p.currency}` : "—"}
-                    </td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
-                      {p.hasContract ? `$${num(p.surchargeValue + p.extraDayValue + p.extraNightValue + p.extraHolidayValue)} ${p.currency}` : "—"}
-                    </td>
-                    <td style={{ padding: "7px 8px", textAlign: "right" }}>
-                      {p.hasContract ? (p.absenceDays > 0 ? `−$${num(p.absenceDiscount)} (${p.absenceDays} d)` : "—") : "—"}
-                    </td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>
-                      {p.hasContract ? `$${num(p.totalValue)} ${p.currency}` : "—"}
-                    </td>
-                  </tr>
-                ))}
-                {dash.payroll.length === 0 && (
+          <div className="table-card">
+            <h3>
+              Horas y valores del mes · {dash.params.correctionWindowHours} h de plazo para correcciones · umbral de{" "}
+              {dash.params.absenceThreshold} faltas
+            </h3>
+            <p className="muted" style={{ fontSize: 12, margin: "2px 0 10px" }}>
+              Valor de los recargos y las horas extra según las marcaciones, menos las ausencias injustificadas. Se suma al sueldo base: no incluye seguridad social, incapacidades ni prestaciones, que liquida el sistema de nómina.
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table className="pay-table">
+                <thead>
                   <tr>
-                    <td colSpan={11} className="empty" style={{ textAlign: "center" }}>
-                      Sin colaboradores en el filtro.
-                    </td>
+                    <th>Colaborador</th>
+                    <th>Sede</th>
+                    <th className="r">Trabajadas</th>
+                    <th className="r">Ordinarias</th>
+                    <th className="r">Extra diurna</th>
+                    <th className="r">Extra noct.</th>
+                    <th className="r">Extra fest.</th>
+                    <th className="r">Valor hora</th>
+                    <th className="r">Recargos y extras</th>
+                    <th className="r">Ausencias</th>
+                    <th className="r">A pagar adicional</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {dash.payroll.slice(page * PAGE, page * PAGE + PAGE).map((p) => (
+                    <tr key={p.employeeId}>
+                      <td style={{ fontWeight: 600 }}>
+                        {p.name}
+                        {p.hasContract === false && <span className="pill warn" style={{ marginLeft: 6 }}>sin contrato</span>}
+                      </td>
+                      <td className="soft">{p.siteName}</td>
+                      <td className="r">{num(p.workedHours, 1)} h</td>
+                      <td className="r">{num(p.ordinaryHours, 1)} h</td>
+                      <td className="r" style={{ color: p.extraDayHours > 0 ? "#e11d48" : undefined }}>{num(p.extraDayHours, 1)} h</td>
+                      <td className="r" style={{ color: p.extraNightHours > 0 ? "#7c3aed" : undefined }}>{num(p.extraNightHours, 1)} h</td>
+                      <td className="r" style={{ color: p.extraHolidayHours > 0 ? "#e11d48" : undefined }}>{num(p.extraHolidayHours, 1)} h</td>
+                      <td className="r">{p.hasContract ? `$${num(p.hourlyRate)}` : "—"}</td>
+                      <td className="r">
+                        {p.hasContract ? `$${num(p.surchargeValue + p.extraDayValue + p.extraNightValue + p.extraHolidayValue)}` : "—"}
+                      </td>
+                      <td className="r">
+                        {p.hasContract ? (p.absenceDays > 0 ? `−$${num(p.absenceDiscount)} (${p.absenceDays} d)` : "—") : "—"}
+                      </td>
+                      <td className="r" style={{ fontWeight: 600 }}>{p.hasContract ? `$${num(p.totalValue)}` : "—"}</td>
+                    </tr>
+                  ))}
+                  {dash.payroll.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="empty" style={{ textAlign: "center" }}>
+                        Sin colaboradores en el filtro.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {dash.payroll.length > 0 && (
+              <div className="pager">
+                <span className="muted">
+                  Mostrando {Math.min(PAGE, dash.payroll.length - page * PAGE)} de {dash.payroll.length} colaboradores
+                  {siteId ? ` en ${sites.find((x) => x.id === siteId)?.name ?? "la sede"}` : ""}
+                </span>
+                <div className="pager-nav">
+                  <Button variant="outline" className="shade" disabled={page === 0} onClick={() => setPage((n) => n - 1)}>
+                    Anterior
+                  </Button>
+                  <strong>
+                    Página {page + 1} de {Math.max(1, Math.ceil(dash.payroll.length / PAGE))}
+                  </strong>
+                  <Button
+                    variant="outline"
+                    className="shade"
+                    disabled={(page + 1) * PAGE >= dash.payroll.length}
+                    onClick={() => setPage((n) => n + 1)}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
