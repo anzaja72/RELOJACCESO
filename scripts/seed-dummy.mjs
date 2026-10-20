@@ -64,23 +64,34 @@ if (process.env.NODE_ENV === "production" && !force) {
   console.error("seed-dummy: NODE_ENV=production. Este script borra datos; no se ejecuta en producción.");
   process.exit(1);
 }
+const now = localNow();
+const today = now.date;
+// Historia hacia atrás desde hoy. Por defecto, desde el día 1 del mes anterior (dos meses completos
+// de referencia para los reportes); SEED_DAYS=N fija una cantidad de días calendario (1–180).
+const addDays = (date, n) => new Date(new Date(`${date}T12:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+const prevMonthStart = (() => {
+  const [y, m] = today.split("-").map(Number);
+  return new Date(Date.UTC(m === 1 ? y - 1 : y, m === 1 ? 11 : m - 2, 1, 12)).toISOString().slice(0, 10);
+})();
+const DAYS = process.env.SEED_DAYS
+  ? Math.max(1, Math.min(180, Number(process.env.SEED_DAYS) || 45))
+  : Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${prevMonthStart}T12:00:00Z`)) / 86400000) + 1;
+const startDate = addDays(today, -(DAYS - 1));
+
 const foreign = db
-  .prepare("SELECT count(*) n FROM punches WHERE id NOT LIKE 'pd%' AND captured_at >= '2026-10-01' AND employee_id IN (" + EXISTING.map(() => "?").join(",") + ")")
-  .get(...EXISTING).n;
+  .prepare("SELECT count(*) n FROM punches WHERE id NOT LIKE 'pd%' AND captured_at >= ? AND employee_id IN (" + EXISTING.map(() => "?").join(",") + ")")
+  .get(startDate, ...EXISTING).n;
 // Con marcaciones reales de los empleados originales no se tocan: solo se generan los 100 ficticios.
 const touchExisting = foreign === 0 || force;
 if (!touchExisting) {
-  console.log(`seed-dummy: ${foreign} marcaciones reales de octubre se conservan; solo se cargan los empleados ficticios.`);
+  console.log(`seed-dummy: ${foreign} marcaciones reales del periodo se conservan; solo se cargan los empleados ficticios.`);
 }
-
-const now = localNow();
-const today = now.date;
 
 // ---------- limpieza idempotente ----------
 db.prepare("DELETE FROM exceptions WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM punches WHERE employee_id LIKE 'emp_d%'").run();
 if (touchExisting) {
-  db.prepare(`DELETE FROM punches WHERE employee_id IN (${EXISTING.map(() => "?").join(",")}) AND captured_at >= '2026-10-01'`).run(...EXISTING);
+  db.prepare(`DELETE FROM punches WHERE employee_id IN (${EXISTING.map(() => "?").join(",")}) AND captured_at >= ?`).run(...EXISTING, startDate);
 }
 db.prepare("DELETE FROM schedules WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM contracts WHERE employee_id LIKE 'emp_d%'").run();
@@ -116,7 +127,7 @@ const tx = db.transaction(() => {
   const upContract = db.prepare("UPDATE contracts SET monthly_salary = ?, weekly_hours = ? WHERE employee_id = ?");
 
   for (const e of employees) {
-    insEmp.run(e.id, e.code, e.name, e.site, e.role, "2026-09-15T08:00:00.000Z");
+    insEmp.run(e.id, e.code, e.name, e.site, e.role, `${addDays(startDate, -1)}T08:00:00.000Z`);
     const cfg = CFG[e.kind];
     for (let wd = 1; wd <= 5; wd++) insSched.run(`sch_${e.id}_${wd}`, e.id, wd, cfg.start, cfg.end, cfg.shift);
 
@@ -141,13 +152,14 @@ const tx = db.transaction(() => {
     insPunch.run(`pd${String(++pid).padStart(7, "0")}`, emp.id, emp.site, type, captured, recv, "term_seed", 0.97, "matched", "passed", "face", ev);
   };
 
-  // Lunes 2026-09-28 .. viernes dentro de octubre (días laborables con agenda).
-  // Octubre de 2026 hasta hoy (máximo el 31); si hoy está fuera de ese mes, hasta el 9.
-  const lastDay = today.startsWith("2026-10") ? Number(today.slice(8, 10)) : 9;
-  for (let day = 1; day <= lastDay; day++) {
-    const date = `2026-10-${String(day).padStart(2, "0")}`;
+  // Días laborables (lunes a viernes) desde hoy hacia atrás.
+  const workdays = [];
+  for (let i = DAYS - 1; i >= 0; i--) {
+    const date = addDays(today, -i);
     const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
-    if (dow === 0 || dow === 6) continue; // fin de semana: sin agenda → ausentes
+    if (dow !== 0 && dow !== 6) workdays.push(date);
+  }
+  for (const date of workdays) {
     const isToday = date === today;
 
     for (const e of [...employees, ...(touchExisting ? EXISTING : []).map((id) => ({ id, kind: "std", site: null }))]) {
@@ -187,12 +199,13 @@ const tx = db.transaction(() => {
   }
 
   // Unas licencias justificadas para variedad (excluidas de alerta de faltas injustificadas).
+  const past = workdays.filter((d) => d < today);
+  const pick = (k) => past[Math.min(past.length - 1, Math.floor((past.length * k) / 10))];
   const exc = [
-    ["emp_d010", "2026-10-06"], ["emp_d011", "2026-10-07"], ["emp_d012", "2026-10-05"],
-    ["emp_d012", "2026-10-06"], ["emp_d012", "2026-10-07"], ["emp_d030", "2026-10-06"],
-    ["emp_d031", "2026-10-06"], ["emp_d031", "2026-10-07"],
-  ];
-  for (const [id, d] of exc) insExc.run(`exc_${id}_${d}`, id, d, "justified", "Licencia médica justificada", "2026-10-01T08:00:00.000Z");
+    ["emp_d010", pick(2)], ["emp_d011", pick(3)], ["emp_d012", pick(4)], ["emp_d012", pick(5)], ["emp_d012", pick(6)],
+    ["emp_d030", pick(5)], ["emp_d031", pick(7)], ["emp_d031", pick(8)],
+  ].filter(([, d]) => d);
+  for (const [id, d] of exc) insExc.run(`exc_${id}_${d}`, id, d, "justified", "Licencia médica justificada", `${startDate}T08:00:00.000Z`);
 });
 
 tx();
@@ -201,5 +214,5 @@ const counts = {};
 for (const t of ["employees", "schedules", "contracts", "punches", "exceptions", "sites"]) {
   counts[t] = db.prepare(`SELECT count(*) n FROM ${t}`).get().n;
 }
-console.log("seed-dummy ok:", counts);
+console.log(`seed-dummy ok: ${DAYS} días hacia atrás desde ${today} (desde ${startDate})`, counts);
 db.close();
