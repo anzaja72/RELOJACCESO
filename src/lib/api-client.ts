@@ -324,6 +324,7 @@ export const api = {
       source: string;
       missing: boolean;
       widgets?: Widget[];
+      llm?: { provider: string; model: string | null };
     }>("/api/v1/ai/chat", { method: "POST", admin: true, body: JSON.stringify(body) }),
   anomalies: (qs = "") =>
     request<{ anomalies: Array<{

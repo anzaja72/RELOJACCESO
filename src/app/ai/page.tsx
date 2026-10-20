@@ -28,11 +28,21 @@ export default function AiPage() {
   const [zoneId, setZoneId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [question, setQuestion] = useState(HINTS[0]);
-  const [log, setLog] = useState<Array<{ q: string; a: string; cites: string; source: string; widgets: Widget[] }>>([]);
+  const [log, setLog] = useState<Array<{ q: string; a: string; cites: string; source: string; widgets: Widget[]; fellBack: boolean }>>([]);
   const [briefing, setBriefing] = useState<Array<{ text: string; href: string }>>([]);
   const [briefMeta, setBriefMeta] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Segundos transcurridos mientras el modelo trabaja, para que se vea que la solicitud sigue viva.
+  useEffect(() => {
+    if (!pending) return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [pending]);
 
   useEffect(() => {
     void api.catalog().then((cat) => {
@@ -66,6 +76,7 @@ export default function AiPage() {
 
   async function ask(q = question) {
     setBusy(true);
+    setPending(q);
     setError(null);
     try {
       const res = await api.chat({ question: q, ...region() });
@@ -76,18 +87,21 @@ export default function AiPage() {
           cites: res.cites.map((c) => `${c.type}:${c.id}`).join(" · "),
           source: res.source,
           widgets: res.widgets ?? [],
+          fellBack: res.source === "canned" && !!res.llm && res.llm.provider !== "none",
         },
         ...prev,
       ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo preguntar");
     } finally {
+      setPending(null);
       setBusy(false);
     }
   }
 
   async function brief() {
     setBusy(true);
+    setPending("briefing del día");
     try {
       const res = await api.briefing(undefined, siteId || undefined, countryId || undefined, zoneId || undefined);
       setBriefing(res.briefing.bullets);
@@ -95,6 +109,7 @@ export default function AiPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo generar");
     } finally {
+      setPending(null);
       setBusy(false);
     }
   }
@@ -156,21 +171,43 @@ export default function AiPage() {
             <Input value={question} onChange={(e) => setQuestion(e.target.value)} />
             <div className="flex flex-wrap gap-2">
               <Button className="shade" disabled={busy} onClick={() => void ask()}>
-                Preguntar
+                {pending ? (
+                  <>
+                    <span className="spinner spinner-sm" aria-hidden="true" /> Consultando…
+                  </>
+                ) : (
+                  "Preguntar"
+                )}
               </Button>
               {HINTS.map((h) => (
-                <Button key={h} variant="outline" className="shade" onClick={() => { setQuestion(h); void ask(h); }}>
+                <Button key={h} variant="outline" className="shade" disabled={busy} onClick={() => { setQuestion(h); void ask(h); }}>
                   {h}
                 </Button>
               ))}
             </div>
           </div>
+          {pending && (
+            <div className="ai-pending" role="status" aria-live="polite">
+              <span className="spinner" aria-hidden="true" />
+              <div>
+                <strong>Consultando al modelo de IA… {elapsed} s</strong>
+                <span>
+                  Estamos analizando los datos de «{pending}». Puede tardar hasta un minuto; no cierre esta pantalla.
+                </span>
+              </div>
+            </div>
+          )}
           {log.map((item, i) => (
             <div key={`${item.q}-${i}`} className="row" style={{ padding: "14px 0" }}>
               <strong>{item.q}</strong>
               <span style={{ whiteSpace: "pre-wrap" }}>{item.a}</span>
               <AiWidgets widgets={item.widgets} />
               {item.cites ? <span>Citas: {item.cites}</span> : null}
+              {item.fellBack && (
+                <span className="err-text" style={{ marginTop: 6 }}>
+                  El modelo no respondió a tiempo; se muestra la respuesta básica. Intente de nuevo.
+                </span>
+              )}
               <span className="pill" style={{ marginTop: 8 }}>{item.source}</span>
             </div>
           ))}

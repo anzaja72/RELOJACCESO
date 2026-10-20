@@ -442,3 +442,12 @@
 .chips b { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 5px; background: var(--secondary); color: var(--ink-3); }
 .ai-card { background: color-mix(in srgb, #f5b83d 14%, var(--card)); }
 @media (max-width: 900px) { .mod-grid-2 { grid-template-columns: 1fr; } .hero { padding: 22px 18px; } }
+
+/* ---- Indicador de espera del modelo ---- */
+.spinner { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--primary) 22%, transparent); border-top-color: var(--primary); animation: spin .8s linear infinite; flex: none; }
+.spinner-sm { width: 13px; height: 13px; border-width: 2px; border-color: color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; margin-right: 6px; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ai-pending { display: flex; align-items: center; gap: 14px; margin-top: 16px; padding: 14px 16px; border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: 10px; background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.ai-pending strong { display: block; font-size: 13.5px; }
+.ai-pending span:not(.spinner) { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
