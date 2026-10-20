@@ -88,18 +88,29 @@ if (!touchExisting) {
 }
 
 // ---------- limpieza idempotente ----------
-db.prepare("DELETE FROM exceptions WHERE employee_id LIKE 'emp_d%'").run();
-db.prepare("DELETE FROM punches WHERE employee_id LIKE 'emp_d%'").run();
+// Borra lo que dependa de los empleados ficticios (huellas faciales, correcciones, alertas, etc.).
+// Se recorren las tablas con employee_id para no chocar con restricciones de clave foránea.
+db.prepare("DELETE FROM corrections WHERE punch_id IN (SELECT id FROM punches WHERE employee_id LIKE 'emp_d%')").run();
+for (const { name } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all()) {
+  if (name === "employees" || name === "events") continue;
+  const cols = db.prepare(`PRAGMA table_info(${name})`).all().map((c) => c.name);
+  if (cols.includes("employee_id")) db.prepare(`DELETE FROM ${name} WHERE employee_id LIKE 'emp_d%'`).run();
+}
 if (touchExisting) {
   db.prepare(`DELETE FROM punches WHERE employee_id IN (${EXISTING.map(() => "?").join(",")}) AND captured_at >= ?`).run(...EXISTING, startDate);
 }
-db.prepare("DELETE FROM schedules WHERE employee_id LIKE 'emp_d%'").run();
-db.prepare("DELETE FROM contracts WHERE employee_id LIKE 'emp_d%'").run();
 db.prepare("DELETE FROM employees WHERE id LIKE 'emp_d%'").run();
-db.prepare("DELETE FROM sites WHERE id IN ('site_r03','site_r04','site_r05')").run();
+// Las sedes extra se recrean solo si nada ajeno depende de ellas (tablets activadas, personas reales).
+for (const id of ["site_r03", "site_r04", "site_r05"]) {
+  const used =
+    db.prepare("SELECT count(*) n FROM employees WHERE site_id = ?").get(id).n +
+    db.prepare("SELECT count(*) n FROM terminals WHERE site_id = ?").get(id).n +
+    db.prepare("SELECT count(*) n FROM punches WHERE site_id = ?").get(id).n;
+  if (used === 0) db.prepare("DELETE FROM sites WHERE id = ?").run(id);
+}
 
 // ---------- sitios extra (5 sedes para KPIs por sede y filtro regional) ----------
-const insSite = db.prepare("INSERT INTO sites (id, code, name, city, timezone, country_id, zone_id) VALUES (?,?,?,?,?,?,?)");
+const insSite = db.prepare("INSERT OR IGNORE INTO sites (id, code, name, city, timezone, country_id, zone_id) VALUES (?,?,?,?,?,?,?)");
 insSite.run("site_r03", "R03", "Café Central Chapinero", "Bogotá", TZ, "cty_co", "zone_andina");
 insSite.run("site_r04", "R04", "Panadería El Trigal", "Medellín", TZ, "cty_co", "zone_andina");
 insSite.run("site_r05", "R05", "Heladería Bocagrande", "Cartagena", TZ, "cty_co", "zone_caribe");
