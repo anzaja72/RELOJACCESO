@@ -55,11 +55,12 @@ export function workedIntervals(punches: LaborPunch[]) {
   const intervals: Array<{ start: string; end: string; ms: number }> = [];
   let orphans = 0;
   let open: LaborPunch | null = null;
+  // La salida a almuerzo cierra el intervalo y el regreso abre otro: el almuerzo no suma horas.
   for (const p of sorted) {
-    if (p.type === "IN") {
+    if (p.type === "IN" || p.type === "BREAK_END") {
       if (open) orphans += 1;
       open = p;
-    } else if (p.type === "OUT") {
+    } else if (p.type === "OUT" || p.type === "BREAK_START") {
       if (!open) {
         orphans += 1;
         continue;

@@ -78,3 +78,17 @@ const shift = (date, inHm, outHm) => [
 }
 
 console.log("labor.test.mjs ok");
+
+// Almuerzo con cuatro marcas (IN, BREAK_START, BREAK_END, OUT): el almuerzo no suma horas ni genera huérfanas.
+{
+  const four = [
+    { id: "a", type: "IN", capturedAt: at("2026-10-06", "08:00") },
+    { id: "b", type: "BREAK_START", capturedAt: at("2026-10-06", "12:00") },
+    { id: "c", type: "BREAK_END", capturedAt: at("2026-10-06", "12:30") },
+    { id: "d", type: "OUT", capturedAt: at("2026-10-06", "16:30") },
+  ];
+  const r = analyzeLabor(four, TZ);
+  assert.equal(r.days[0].hours, 8);
+  assert.equal(r.orphans, 0);
+}
+console.log("labor.test.mjs almuerzo ok");

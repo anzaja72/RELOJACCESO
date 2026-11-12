@@ -28,12 +28,12 @@ export function filterBySite<T>(actor: Actor, rows: T[], siteOf: (row: T) => str
   return allowed ? rows.filter((r) => allowed.includes(String(siteOf(r)))) : rows;
 }
 
-/** Datos de gestión: gerentes de sede o superior, y auditor (lectura). El operador no. */
+/** Datos de gestión: gerentes de sede o superior, RR. HH. y auditor (lectura). El operador no. */
 export function requireReader(request: Request): Actor | NextResponse {
   const actor = requireActor(request);
   if (actor instanceof NextResponse) return actor;
-  if (!canApprove(actor.role) && actor.role !== "auditor") {
-    return json({ error: "Se requiere gerente de sede, auditor o superior", code: "FORBIDDEN" }, 403, request);
+  if (!canApprove(actor.role) && actor.role !== "auditor" && actor.role !== "hr") {
+    return json({ error: "Se requiere RR. HH., gerente de sede, auditor o superior", code: "FORBIDDEN" }, 403, request);
   }
   return actor;
 }

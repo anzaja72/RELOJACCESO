@@ -11,7 +11,8 @@ export type Role =
   | "zone_manager"
   | "site_manager"
   | "operator"
-  | "auditor";
+  | "auditor"
+  | "hr";
 
 export type SessionUser = {
   id: string;
@@ -127,6 +128,7 @@ export function newTotpSecret() {
 export const ROLE_RANK: Record<Role, number> = {
   auditor: 1,
   operator: 2,
+  hr: 2,
   site_manager: 3,
   zone_manager: 4,
   superadmin: 5,

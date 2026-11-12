@@ -17,6 +17,8 @@ export type Site = {
   timezone: string;
   countryId?: string | null;
   zoneId?: string | null;
+  opensHm?: string | null;
+  closesHm?: string | null;
 };
 
 export type Employee = {
@@ -30,6 +32,9 @@ export type Employee = {
   enrolled: boolean;
   templateCount: number;
   deleted?: boolean;
+  documentId?: string | null;
+  employeeTypeId?: string | null;
+  employmentStatus?: string;
 };
 
 export type FaceTemplate = {
@@ -58,6 +63,8 @@ export type Punch = {
   supervisorId?: string | null;
   reason?: string | null;
   novelty?: string | null;
+  /** null = sin verificar; false = tienda no autorizada (excepción RF-12). */
+  storeAuthorized?: boolean | null;
 };
 
 export type Terminal = {

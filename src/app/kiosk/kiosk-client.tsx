@@ -24,6 +24,23 @@ function retryable(err: unknown) {
   return status == null || status >= 500;
 }
 
+/** RF-07: los cuatro eventos de la jornada con nombre legible. */
+const EVENT_LABEL: Record<string, string> = {
+  IN: "Entrada",
+  BREAK_START: "Salida a almuerzo",
+  BREAK_END: "Regreso de almuerzo",
+  OUT: "Salida de trabajo",
+};
+
+function stamp(iso: string, site: Site) {
+  const when = new Intl.DateTimeFormat("es-CO", {
+    timeZone: site.timezone,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
+  return `${when} · ${site.name}`;
+}
+
 type ResultState = {
   tone: "ok" | "bad" | "warn";
   title: string;
@@ -47,6 +64,7 @@ export function KioskClient() {
   const [clock, setClock] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [eventType, setEventType] = useState<PunchType>("IN");
+  const [askOut, setAskOut] = useState(false);
   const [eventTypes, setEventTypes] = useState<string[]>(["IN", "OUT"]);
   const [pinEmployee, setPinEmployee] = useState("");
   const [pinReason, setPinReason] = useState("");
@@ -295,14 +313,15 @@ export function KioskClient() {
         return;
       }
 
+      let saved: Awaited<ReturnType<typeof api.createPunch>> | null = null;
       if (navigator.onLine) {
         try {
-          const saved = await api.createPunch(item);
+          saved = await api.createPunch(item);
           if (saved.punch.decision === "duplicate") {
             setResult({
               tone: "warn",
               title: "Ya marcada",
-              detail: `${match.employee?.name} acaba de registrar ${type === "IN" ? "entrada" : "salida"}.`,
+              detail: `${match.employee?.name} acaba de registrar ${(EVENT_LABEL[type] ?? type).toLowerCase()}.`,
             });
             return;
           }
@@ -320,8 +339,8 @@ export function KioskClient() {
           await refreshQueue();
           setResult({
             tone: "ok",
-            title: type === "IN" ? "Entrada guardada offline" : "Salida guardada offline",
-            detail: `${match.employee?.name} · se sincronizará al volver la red.`,
+            title: `${EVENT_LABEL[type] ?? type} guardada offline`,
+            detail: `${match.employee?.name} · ${stamp(item.capturedAt, site)} · se sincronizará al volver la red.`,
           });
           return;
         }
@@ -330,16 +349,26 @@ export function KioskClient() {
         await refreshQueue();
         setResult({
           tone: "ok",
-          title: type === "IN" ? "Entrada en cola" : "Salida en cola",
-          detail: `${match.employee?.name} · sin pérdida de datos. Score ${match.score}.`,
+          title: `${EVENT_LABEL[type] ?? type} en cola`,
+          detail: `${match.employee?.name} · ${stamp(item.capturedAt, site)} · sin pérdida de datos.`,
         });
         return;
       }
 
+      // El servidor puede reclasificar (una entrada tras el almuerzo es el regreso de almuerzo).
+      const label = EVENT_LABEL[saved?.punch.type ?? type] ?? type;
+      if (saved?.exception) {
+        setResult({
+          tone: "bad",
+          title: `${label}: registrada como excepción`,
+          detail: `${match.employee?.name} no está autorizado en esta tienda. Queda pendiente de revisión regional. ${stamp(item.capturedAt, site)}`,
+        });
+        return;
+      }
       setResult({
         tone: "ok",
-        title: type === "IN" ? "Entrada registrada" : "Salida registrada",
-        detail: `${match.employee?.name} · ${match.employee?.code} · score ${match.score}`,
+        title: `${label} registrada`,
+        detail: `${match.employee?.name} · ${match.employee?.code} · ${stamp(item.capturedAt, site)}`,
       });
     } catch (error) {
       setResult({
@@ -434,10 +463,7 @@ export function KioskClient() {
             <button
               className="punch-btn out shade"
               disabled={busy || !modelsReady}
-              onClick={() => {
-                setEventType("OUT");
-                void punch("OUT");
-              }}
+              onClick={() => setAskOut(true)}
             >
               <LogOut className="size-4" />
               Salida
@@ -512,6 +538,41 @@ export function KioskClient() {
           ) : null}
         </div>
       </div>
+      {askOut && (
+        <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="ask-out-title">
+          <div className="dialog-card">
+            <h2 id="ask-out-title">¿Salida a almuerzo o salida de trabajo?</h2>
+            <p className="muted">El almuerzo no cuenta como tiempo trabajado. Al volver, marque Entrada.</p>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="punch-btn shade"
+                onClick={() => {
+                  setAskOut(false);
+                  setEventType("BREAK_START");
+                  void punch("BREAK_START");
+                }}
+              >
+                Salida a almuerzo
+              </button>
+              <button
+                type="button"
+                className="punch-btn out shade"
+                onClick={() => {
+                  setAskOut(false);
+                  setEventType("OUT");
+                  void punch("OUT");
+                }}
+              >
+                Salida de trabajo
+              </button>
+            </div>
+            <button type="button" className="native-select shade" onClick={() => setAskOut(false)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {result && (
         <div className={`result-overlay ${result.tone}`} role="alertdialog">
           {result.tone === "bad" ? (

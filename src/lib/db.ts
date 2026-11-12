@@ -21,6 +21,7 @@ import { adminPassword, supervisorPin } from "@/lib/secrets";
 import { PRESETS } from "@/lib/brand";
 import { GENESIS_HASH, chainHash } from "@/lib/integrity";
 import { hashPassword } from "@/lib/session";
+import { migrateStores } from "@/lib/stores-schema";
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
@@ -31,6 +32,7 @@ const globalForDb = globalThis as unknown as {
   __bioDb?: Database.Database;
   __bioV3?: boolean;
   __bioV4?: boolean;
+  __bioStores?: boolean;
 };
 
 function createDb() {
@@ -44,16 +46,20 @@ function createDb() {
   migrateV2(db);
   migrateV3(db);
   migrateV4(db);
+  migrateStores(db);
+  globalForDb.__bioStores = true;
   return db;
 }
 
 export function getDb() {
   if (!globalForDb.__bioDb) {
     globalForDb.__bioDb = createDb();
-  } else if (!globalForDb.__bioV3 || !globalForDb.__bioV4) {
+  } else if (!globalForDb.__bioV3 || !globalForDb.__bioV4 || !globalForDb.__bioStores) {
     migrateV3(globalForDb.__bioDb);
     migrateV4(globalForDb.__bioDb);
+    migrateStores(globalForDb.__bioDb);
     globalForDb.__bioV3 = true;
+    globalForDb.__bioStores = true;
   }
   return globalForDb.__bioDb;
 }
@@ -532,6 +538,9 @@ function mapEmployee(row: Record<string, unknown>): Employee {
     enrolled: Number(row.template_count || 0) > 0,
     templateCount: Number(row.template_count || 0),
     deleted: Boolean(row.deleted_at),
+    documentId: row.document_id ? String(row.document_id) : null,
+    employeeTypeId: row.employee_type_id ? String(row.employee_type_id) : null,
+    employmentStatus: row.employment_status ? String(row.employment_status) : "activo",
   };
 }
 
@@ -544,6 +553,8 @@ function mapSite(row: Record<string, unknown>): Site {
     timezone: String(row.timezone),
     countryId: row.country_id ? String(row.country_id) : null,
     zoneId: row.zone_id ? String(row.zone_id) : null,
+    opensHm: row.opens_hm ? String(row.opens_hm) : null,
+    closesHm: row.closes_hm ? String(row.closes_hm) : null,
   };
 }
 
@@ -567,6 +578,7 @@ function mapPunch(row: Record<string, unknown>): Punch {
     supervisorId: row.supervisor_id ? String(row.supervisor_id) : null,
     reason: row.reason ? String(row.reason) : null,
     novelty: row.novelty ? String(row.novelty) : null,
+    storeAuthorized: row.store_authorized == null ? null : Boolean(row.store_authorized),
   };
 }
 
@@ -714,7 +726,12 @@ export function employeePunchableAtSite(employeeId: string, siteId: string): boo
   const employee = getEmployee(employeeId);
   if (!employee || !employee.active || employee.deleted) return false;
   const site = getSiteByCode(siteId);
-  return Boolean(site) && employee.siteId === site!.id;
+  if (!site) return false;
+  if (employee.siteId === site.id) return true;
+  // Otra tienda de la misma región: se acepta y `ingestPunch` la marca como excepción si no está
+  // autorizada (RF-12). Otra región sigue siendo rechazada.
+  const home = getSiteByCode(employee.siteId);
+  return Boolean(site.zoneId) && home?.zoneId === site.zoneId;
 }
 
 export function createEmployee(input: {

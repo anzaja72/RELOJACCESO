@@ -1,7 +1,8 @@
 import { isKioskDenied, isResponse, kioskTerminalId, requireActor, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
 import { eventTypes } from "@/lib/db-ops";
-import { employeePunchableAtSite, listPunches, recentDuplicate, upsertPunch } from "@/lib/db";
+import { employeePunchableAtSite, listPunches, recentDuplicate } from "@/lib/db";
+import { ingestPunch } from "@/lib/stores";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import { filterBySite } from "@/lib/scope";
 import type { SyncItem } from "@/lib/types";
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
       if (dup) decision = "duplicate";
     }
 
-    const result = upsertPunch({
+    const result = ingestPunch({
       id: body.id,
       employeeId: body.employeeId ?? null,
       siteId: body.siteId,
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
       livenessHint: body.livenessHint ?? "skipped",
       offline: Boolean(body.offline),
     });
-    return json({ punch: result.punch, created: result.created }, result.created ? 201 : 200);
+    return json({ punch: result.punch, created: result.created, exception: result.exception }, result.created ? 201 : 200);
   } catch (error) {
     return serverError(error);
   }

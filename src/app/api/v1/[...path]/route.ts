@@ -77,7 +77,6 @@ import {
   recordEvent,
   revokeTerminal,
   statsTodayForSites,
-  upsertPunch,
 } from "@/lib/db";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import { isHex, isLogo, parseBrand } from "@/lib/brand";
@@ -96,6 +95,8 @@ import {
   verifyTotp,
 } from "@/lib/session";
 import type { PunchType, SyncItem } from "@/lib/types";
+import { can } from "@/lib/permissions";
+import { DomainError, ingestPunch, updateEmployeeHr } from "@/lib/stores";
 
 // Alertas que un kiosco puede reportar.
 const DEVICE_ALERT_TYPES = new Set(["sync.failed", "terminal.offline", "camera.error"]);
@@ -116,6 +117,22 @@ function redactMoney(row: Record<string, unknown>) {
   const out: Record<string, unknown> = { ...row, hasContract: null };
   for (const k of MONEY_FIELDS) out[k] = null;
   return out;
+}
+
+type HrFields = { documentId?: string | null; employeeTypeId?: string | null; employmentStatus?: string };
+const HR_KEYS = ["documentId", "employeeTypeId", "employmentStatus"] as const;
+
+function hasHrFields(body: HrFields) {
+  return HR_KEYS.some((k) => k in body);
+}
+
+function pickHr(body: HrFields): HrFields {
+  return Object.fromEntries(HR_KEYS.filter((k) => k in body).map((k) => [k, body[k]])) as HrFields;
+}
+
+/** Solo RR. HH. crea empleados, cambia su tienda base o cargo, los da de baja o edita su ficha laboral. */
+function forbiddenHr(request: Request) {
+  return json({ error: "Solo RR. HH. crea empleados, cambia su tienda base o cargo y edita la ficha laboral", code: "FORBIDDEN" }, 403, request);
 }
 
 function scopeOf(actor: Actor) {
@@ -625,7 +642,8 @@ async function handlePost(request: Request, parts: string[]) {
         siteId?: string;
         role?: string;
         pin?: string;
-      }>(request);
+      } & HrFields>(request);
+      if (!can(actor.role, "employee.manage")) return forbiddenHr(request);
       if (!body.name?.trim() || !body.code?.trim() || !body.siteId) {
         return badRequest("name, code y siteId son obligatorios", { code: "VALIDATION" }, request);
       }
@@ -640,8 +658,10 @@ async function handlePost(request: Request, parts: string[]) {
         by: actor.email,
       });
       if (body.pin) patchEmployee(employee.id, { pin: body.pin });
+      if (hasHrFields(body)) updateEmployeeHr(employee.id, pickHr(body), actor);
       return json({ employee: getEmployee(employee.id) }, 201, request);
     } catch (error) {
+      if (error instanceof DomainError) return json({ error: error.message, code: error.code }, error.status, request);
       return serverError(error, request);
     }
   }
@@ -696,7 +716,7 @@ async function handlePost(request: Request, parts: string[]) {
           supervisorId: "supervisor_pin",
           reason: body.reason,
         };
-        const result = upsertPunch({ ...item, offline: Boolean(body.offline) });
+        const result = ingestPunch({ ...item, offline: Boolean(body.offline) });
         insertEnrollmentAudit({
           employeeId: body.employeeId,
           operatorName: "supervisor_pin",
@@ -709,7 +729,7 @@ async function handlePost(request: Request, parts: string[]) {
           employeeId: body.employeeId,
           reason: body.reason,
         });
-        return json({ punch: result.punch, created: result.created }, result.created ? 201 : 200, request);
+        return json({ punch: result.punch, created: result.created, exception: result.exception }, result.created ? 201 : 200, request);
       }
 
       if (!body.id || !body.capturedAt) {
@@ -728,7 +748,7 @@ async function handlePost(request: Request, parts: string[]) {
         });
         if (dup) decision = "duplicate";
       }
-      const result = upsertPunch({
+      const result = ingestPunch({
         id: body.id,
         employeeId: body.employeeId ?? null,
         siteId: body.siteId,
@@ -744,7 +764,7 @@ async function handlePost(request: Request, parts: string[]) {
         supervisorId: body.supervisorId ?? null,
         reason: body.reason ?? null,
       });
-      return json({ punch: result.punch, created: result.created }, result.created ? 201 : 200, request);
+      return json({ punch: result.punch, created: result.created, exception: result.exception }, result.created ? 201 : 200, request);
     } catch (error) {
       return serverError(error, request);
     }
@@ -859,9 +879,12 @@ async function handlePost(request: Request, parts: string[]) {
   }
 
   if (route === "contracts") {
-    // El salario es de lo más sensible: gerentes y superadmin, y solo de empleados de su alcance.
-    const actor = requireApprover(request);
+    // El salario es de lo más sensible: RR. HH., gerentes y superadmin, y solo de empleados de su alcance.
+    const actor = requireActor(request);
     if (isResponse(actor)) return actor;
+    if (!canApprove(actor.role) && actor.role !== "hr") {
+      return json({ error: "Se requiere RR. HH., gerente de sede o superior", code: "FORBIDDEN" }, 403, request);
+    }
     const body = await parseJson<{ employeeId?: string; monthlySalary?: number; weeklyHours?: number; currency?: string }>(request);
     const salary = Number(body.monthlySalary);
     const weekly = body.weeklyHours == null ? 42 : Number(body.weeklyHours);
@@ -997,10 +1020,13 @@ async function handlePatch(request: Request, parts: string[]) {
         deleted?: boolean;
         pin?: string | null;
         role?: string;
-      }>(request);
+      } & HrFields>(request);
       if (body.siteId && !siteInScope(actor, body.siteId)) {
         return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
       }
+      const hrOnly = body.siteId !== undefined || body.role !== undefined || body.deleted !== undefined || hasHrFields(body);
+      if (hrOnly && !can(actor.role, "employee.manage")) return forbiddenHr(request);
+      if (hasHrFields(body)) updateEmployeeHr(access.employee.id, pickHr(body), actor);
       const employee = patchEmployee(access.employee.id, body, actor.email);
       if (body.revokeConsent) {
         insertEnrollmentAudit({
@@ -1014,6 +1040,7 @@ async function handlePatch(request: Request, parts: string[]) {
       }
       return json({ employee }, 200, request);
     } catch (error) {
+      if (error instanceof DomainError) return json({ error: error.message, code: error.code }, error.status, request);
       return serverError(error, request);
     }
   }

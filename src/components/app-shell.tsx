@@ -15,6 +15,11 @@ import {
   Users,
   BarChart3,
   Sparkles,
+  MapPinned,
+  CalendarDays,
+  BellRing,
+  KeyRound,
+  Clock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
@@ -28,6 +33,11 @@ const links = [
   { href: "/kiosk", label: "Kiosco", icon: Camera },
   { href: "/enroll", label: "Enrolar", icon: UserPlus },
   { href: "/admin", label: "Operación", icon: LayoutDashboard },
+  { href: "/region", label: "Regional", icon: MapPinned },
+  { href: "/planner", label: "Planificador", icon: CalendarDays },
+  { href: "/novelties", label: "Novedades", icon: BellRing },
+  { href: "/access", label: "Accesos", icon: KeyRound },
+  { href: "/hours", label: "Horas", icon: Clock },
   { href: "/people", label: "Personas", icon: Users },
   { href: "/structure", label: "Estructura", icon: Building2 },
   { href: "/reports", label: "Reportes", icon: BarChart3 },

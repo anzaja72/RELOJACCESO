@@ -1,6 +1,7 @@
 import { isKioskDenied, isResponse, kioskTerminalId, requireKiosk, resolveKioskSite } from "@/lib/auth";
 import { DUPLICATE_COOLDOWN_MS } from "@/lib/config";
-import { employeePunchableAtSite, recentDuplicate, upsertPunch } from "@/lib/db";
+import { employeePunchableAtSite, recentDuplicate } from "@/lib/db";
+import { ingestPunch } from "@/lib/stores";
 import { badRequest, json, parseJson, rateLimit, serverError } from "@/lib/http";
 import type { SyncItem } from "@/lib/types";
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
         });
         if (dup) decision = "duplicate";
       }
-      const result = upsertPunch({ ...item, decision, offline: true });
+      const result = ingestPunch({ ...item, decision, offline: true });
       if (result.created) accepted.push(item.id);
       else duplicates.push(item.id);
     }

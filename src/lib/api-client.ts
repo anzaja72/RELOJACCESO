@@ -9,7 +9,22 @@ import type {
   SyncItem,
   Terminal,
 } from "@/lib/types";
+import type {
+  CellInput,
+  EmployeeType,
+  HoursRow,
+  Novelty,
+  PlanView,
+  StoreAccess,
+} from "@/lib/stores";
 import { TIMEZONE } from "@/lib/config";
+
+/** Ficha laboral de RR. HH. (el salario va por `saveContract`). */
+export type HrFields = {
+  documentId?: string | null;
+  employeeTypeId?: string | null;
+  employmentStatus?: string;
+};
 
 async function request<T>(
   path: string,
@@ -91,7 +106,7 @@ export const api = {
     role?: string;
     consentAt?: string;
     pin?: string;
-  }) =>
+  } & HrFields) =>
     request<{ employee: Employee }>("/api/v1/employees", {
       method: "POST",
       admin: true,
@@ -116,7 +131,7 @@ export const api = {
       { admin: true },
     ),
   createPunch: (body: SyncItem & { offline?: boolean }) =>
-    request<{ punch: Punch; created: boolean }>("/api/punches", {
+    request<{ punch: Punch; created: boolean; exception?: Novelty | null }>("/api/punches", {
       method: "POST",
       kiosk: true,
       body: JSON.stringify(body),
@@ -169,7 +184,7 @@ export const api = {
       deleted?: boolean;
       pin?: string | null;
       role?: string;
-    },
+    } & HrFields,
   ) =>
     request<{ employee: Employee }>(`/api/v1/employees/${id}`, {
       method: "PATCH",
@@ -419,4 +434,77 @@ export async function fetchAttendance(site?: string): Promise<{
     terminals: terminalsRes.terminals,
     rows,
   };
+}
+
+/* ───────── Aplicación Tiendas: cronogramas, novedades, accesos, horas ───────── */
+
+export type RegionSummary = {
+  weekStart: string;
+  zones: Array<{
+    id: string;
+    name: string;
+    cities: Array<{
+      city: string;
+      sites: Array<{
+        site: Site;
+        employees: number;
+        guests: number;
+        incomplete: number;
+        plan: { id: string; status: string; version: number } | null;
+        approved: boolean;
+        coverageGaps: number;
+        warnings: number;
+      }>;
+    }>;
+  }>;
+  pending: { plans: Array<{ planId: string; siteId: string; site: string; version: number }>; novelties: number; urgent: number; excess: number };
+};
+
+const send = <T,>(path: string, method: string, body?: unknown) =>
+  request<T>(path, { method, admin: true, body: body === undefined ? undefined : JSON.stringify(body) });
+
+export const stores = {
+  permissions: () => request<{ role: string; permissions: string[] }>("/api/v1/permissions", { admin: true }),
+  types: () => request<{ types: EmployeeType[] }>("/api/v1/employee-types", { admin: true }),
+  saveType: (body: Partial<EmployeeType>) => send<{ type: EmployeeType }>("/api/v1/employee-types", "POST", body),
+  region: (week: string) => request<RegionSummary>(`/api/v1/region?week=${week}`, { admin: true }),
+  plan: (site: string, week: string) =>
+    request<PlanView>(`/api/v1/plans?site=${encodeURIComponent(site)}&week=${week}`, { admin: true }),
+  regionPlans: (week: string) => request<{ plans: PlanView[] }>(`/api/v1/plans?scope=region&week=${week}`, { admin: true }),
+  openPlan: (siteId: string, weekStart: string, changeReason?: string) =>
+    send<PlanView>("/api/v1/plans", "POST", { siteId, weekStart, changeReason }),
+  saveCells: (planId: string, cells: CellInput[]) => send<PlanView>(`/api/v1/plans/${planId}`, "PUT", { cells }),
+  planAction: (planId: string, action: "submit" | "approve" | "return", comment?: string) =>
+    send<PlanView>(`/api/v1/plans/${planId}`, "POST", { action, comment }),
+  novelties: (qs = "") =>
+    request<{ novelties: Novelty[]; types: { programada: string[]; urgente: string[] } }>(
+      `/api/v1/novelties${qs ? `?${qs}` : ""}`,
+      { admin: true },
+    ),
+  createNovelty: (body: Record<string, unknown>) => send<{ novelty: Novelty }>("/api/v1/novelties", "POST", body),
+  decideNovelty: (id: string, decision: "aprobada" | "rechazada", comment?: string) =>
+    send<{ novelty: Novelty }>(`/api/v1/novelties/${id}`, "PATCH", { decision, comment }),
+  access: (history = false) => request<{ access: StoreAccess[] }>(`/api/v1/access${history ? "?history=1" : ""}`, { admin: true }),
+  setAccess: (body: { employeeId: string; siteId: string; enabled: boolean; endDate?: string | null; reason?: string | null }) =>
+    send<{ access: StoreAccess | null }>("/api/v1/access", "POST", body),
+  revokeAccess: (id: string) => send<{ access: StoreAccess }>(`/api/v1/access/${id}`, "DELETE"),
+  mobility: () => request<{ mobility: StoreAccess[]; reasons: string[] }>("/api/v1/mobility", { admin: true }),
+  createMobility: (body: Record<string, unknown>) => send<{ mobility: StoreAccess & { interCity: boolean } }>("/api/v1/mobility", "POST", body),
+  setSiteHours: (siteId: string, opensHm: string, closesHm: string) =>
+    send<{ site: Site }>(`/api/v1/site-hours`, "PUT", { siteId, opensHm, closesHm }),
+  hours: (qs: string) => request<{ weekStart: string; cutAt: string; rows: HoursRow[] }>(`/api/v1/hours?${qs}`, { admin: true }),
+};
+
+/** Descarga autenticada (CSV/XLSX) sin exponer el token en la URL. */
+export async function downloadFile(path: string, filename: string) {
+  const token = getToken();
+  if (!token) throw new Error("Inicie sesión para descargar.");
+  const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`No se pudo descargar (${response.status})`);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

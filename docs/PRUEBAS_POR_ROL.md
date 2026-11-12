@@ -44,7 +44,7 @@ Guía para validar qué ve y qué puede hacer cada perfil de Reloj CR. Las tabla
 
 | Acción | Superadmin | Gerente de zona | Gerente de sede | Operador | Auditor |
 |---|---|---|---|---|---|
-| Crear empleado en su sede | Sí | Sí | Sí | Sí | No |
+| Crear empleado (solo RR. HH. y superadmin; ver `docs/REQUERIMIENTOS_TIENDAS.md`) | Sí | No | No | No | No |
 | Capturar biometría en su sede | Sí | Sí | Sí | Sí | No |
 | Activar un terminal en su sede | Sí | Sí | Sí | Sí | No |
 | Corregir una marca | Sí | Sí | Sí | No | No |
@@ -125,3 +125,18 @@ Marquen cada punto como correcto, incorrecto u observación.
 ## 7. Cómo reportar
 
 Para cada hallazgo anoten: perfil, pantalla o acción, qué esperaban, qué pasó, y captura. Los 403 esperados de la sección 4 no se reportan.
+
+## 5. Ajuste «Aplicación Tiendas» (rol RR. HH.)
+
+Con `npm run seed:tiendas` (solo demo) se agregan estos usuarios, con la misma contraseña de `ADMIN_PASSWORD`:
+
+| Correo | Perfil | Alcance |
+| --- | --- | --- |
+| `rrhh@reloj.cr` | RR. HH. | Todo; crea empleados, edita la ficha laboral y los salarios |
+| `ivan@reloj.cr` | Gerente de zona | Región Caribe (Barranquilla y Cartagena) |
+| `buenavista@reloj.cr` | Gerente de sede | Buenavista |
+| `altoprado@reloj.cr` | Gerente de sede | Alto Prado |
+| `coordinador@reloj.cr` | Coordinador (operador) | Buenavista |
+
+La matriz completa, los casos CP-01 a CP-15 y las decisiones pendientes están en `docs/REQUERIMIENTOS_TIENDAS.md`.
+

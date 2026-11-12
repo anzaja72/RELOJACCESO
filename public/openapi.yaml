@@ -219,6 +219,117 @@ paths:
       responses:
         "200": { description: Revocada }
         "404": { description: No existe o ya revocada }
+  /api/v1/permissions:
+    get:
+      summary: "Rol y permisos del usuario (matriz de Aplicación Tiendas)"
+      responses:
+        "200": { description: "role + permissions[]" }
+  /api/v1/employee-types:
+    get:
+      summary: "Tipos de jornada (RF-02)"
+      responses:
+        "200": { description: "types[]" }
+    post:
+      summary: "Crear/editar tipo de jornada (RR. HH.)"
+      responses:
+        "200": { description: "type" }
+        "403": { description: "Solo RR. HH." }
+  /api/v1/region:
+    get:
+      summary: "Inicio regional (UI-02) — ciudades, tiendas, estado de cronogramas y pendientes"
+      parameters:
+        - { in: query, name: week, schema: { type: string, format: date } }
+      responses:
+        "200": { description: "zones[], pending" }
+  /api/v1/plans:
+    get:
+      summary: "Cronograma semanal de una tienda (?site=&week=) o de todas las visibles (?scope=region)"
+      parameters:
+        - { in: query, name: site, schema: { type: string } }
+        - { in: query, name: week, schema: { type: string, format: date } }
+        - { in: query, name: scope, schema: { type: string, enum: [region] } }
+      responses:
+        "200": { description: "PlanView con celdas, totales, cobertura y advertencias" }
+        "403": { description: "Tienda fuera del alcance (CP-14)" }
+    post:
+      summary: "Abrir borrador de la semana o nueva versión (changeReason obligatorio si ya hay aprobado)"
+      responses:
+        "201": { description: "PlanView" }
+        "409": { description: "Versión en revisión" }
+  /api/v1/plans/{id}:
+    put:
+      summary: "Guardar celdas [{ employeeId, date, kind turno|descanso|novedad|null, startHm, endHm, lunchMin, note }]"
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "PlanView recalculado" }
+        "409": { description: "Cronograma enviado o aprobado" }
+    post:
+      summary: "Flujo — action submit (enviar al gerente de zona) | approve | return (comment obligatorio)"
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "PlanView" }
+  /api/v1/novelties:
+    get:
+      summary: "Novedades (?status=&kind=&employee=&site=&from=&to=)"
+      responses:
+        "200": { description: "novelties[] + types" }
+    post:
+      summary: "Registrar novedad programada (registrada) o urgente (pendiente)"
+      responses:
+        "201": { description: "novelty" }
+  /api/v1/novelties/{id}:
+    patch:
+      summary: "Aprobar o rechazar una novedad pendiente (comentario obligatorio al rechazar)"
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "novelty" }
+        "409": { description: "Ya decidida" }
+  /api/v1/access:
+    get:
+      summary: "Tiendas autorizadas por empleado (?history=1 incluye revocadas)"
+      responses:
+        "200": { description: "access[]" }
+    post:
+      summary: "Casilla empleado × tienda — { employeeId, siteId, enabled, endDate? }"
+      responses:
+        "200": { description: "access" }
+  /api/v1/access/{id}:
+    delete:
+      summary: "Revocar autorización o movilidad (queda en historial)"
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "access" }
+  /api/v1/mobility:
+    get:
+      summary: "Movilidades autorizadas"
+      responses:
+        "200": { description: "mobility[] + reasons" }
+    post:
+      summary: "Autorizar movilidad { employeeId, toSiteId, startDate, endDate, reason }"
+      responses:
+        "201": { description: "mobility (interCity si cambia de ciudad)" }
+  /api/v1/hours:
+    get:
+      summary: "Control de horas semanal (previsto vs. efectivo, almuerzo excluido); format=csv|xlsx para RR. HH."
+      parameters:
+        - { in: query, name: week, schema: { type: string, format: date } }
+        - { in: query, name: site, schema: { type: string } }
+        - { in: query, name: zone, schema: { type: string } }
+        - { in: query, name: employee, schema: { type: string } }
+        - { in: query, name: review, schema: { type: string, enum: [pendiente, ok] } }
+        - { in: query, name: format, schema: { type: string, enum: [json, csv, xlsx] } }
+      responses:
+        "200": { description: "rows[] con corte; salario solo para RR. HH." }
+  /api/v1/site-hours:
+    put:
+      summary: "Horario de apertura y cierre de una tienda { siteId, opensHm, closesHm } (base de la alerta de cobertura)"
+      responses:
+        "200": { description: "site" }
+        "403": { description: "Solo gerente regional de la zona" }
   /api/v1/anomalies:
     get:
       summary: Anomalías P3

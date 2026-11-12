@@ -36,6 +36,15 @@ Matriz: [`docs/RFP_COMPLIANCE.md`](docs/RFP_COMPLIANCE.md). Biometría: [`docs/B
 
 Pack IA v1.1 (P0 reportes, P3 anomalías, P1 briefing, P2 chat): [`docs/AI.md`](docs/AI.md) · estado [`docs/BACKLOG_AI_v1.1.md`](docs/BACKLOG_AI_v1.1.md). Nemotron: `NVIDIA_API_KEY` en `.env.local`. Demo para un socio: [`docs/SHARE.md`](docs/SHARE.md). PC Windows del socio: [`docs/WINDOWS.md`](docs/WINDOWS.md). ¿Render? Sí — [`docs/RENDER.md`](docs/RENDER.md) (Docker + disco `/data`). Sin clave LLM hay fallback SQL. No hay score punitivo ni CCTV.
 
+## Aplicación Tiendas (Colombia)
+
+Cronograma semanal por tienda con aprobación regional, cobertura de gerente/coordinador, cuatro marcaciones con almuerzo, tiendas autorizadas, movilidad, novedades y control de horas para RR. HH. Pantallas: `/region`, `/planner`, `/novelties`, `/access`, `/hours` y la ficha en `/people`. Trazabilidad, decisiones que cambian el comportamiento y lo que no se puede implementar: [`docs/REQUERIMIENTOS_TIENDAS.md`](docs/REQUERIMIENTOS_TIENDAS.md).
+
+```bash
+npm run seed:tiendas   # solo demo: 3 sedes, 10 empleados y 5 usuarios (requiere ADMIN_PASSWORD y haber arrancado la app una vez)
+NEW_USER_PASSWORD='…' node scripts/create-user.mjs --email rrhh@empresa.co --name "RR. HH." --role hr   # usuario real
+```
+
 ## Kiosco en LAN (tablet o Pi)
 
 1. `npm run dev` en el host.
