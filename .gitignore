@@ -66,3 +66,7 @@ PRUEBAS_USUARIO_ENVIAR.md
 
 # mcp
 /mcp/node_modules
+
+# Datos personales de cargas de empleados: nunca al repositorio
+trabajadores*.csv
+carga-*/
