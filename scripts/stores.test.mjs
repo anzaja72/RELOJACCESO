@@ -224,4 +224,10 @@ const hoursView = S.getPlanView("site_baq_bv", WEEK, gerenteBV, { planId: plan.i
 assert.equal(hoursView.hoursConfirmed, true);
 assert.ok(hoursView.coverage.every((g) => g.fromHm >= "08:00" && g.toHm <= "20:00"));
 
+// RF-16: los eventos de decisión llevan sede y persona, para que un gerente con alcance limitado los vea en Auditoría.
+for (const type of ["novelty.decided", "employee.hr_updated", "plan.decided", "mobility.authorized", "store_access.granted"]) {
+  const payload = JSON.parse(getDb().prepare("SELECT payload FROM events WHERE type = ? ORDER BY rowid LIMIT 1").get(type).payload);
+  assert.ok(payload.siteId, `${type} debe incluir siteId`);
+  assert.ok(payload.by, `${type} debe incluir quién`);
+}
 console.log("stores.test.mjs ok");

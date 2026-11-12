@@ -238,6 +238,7 @@ export function updateEmployeeHr(
   const after = employeeOrThrow(id);
   audit("employee.hr_updated", actor, {
     id,
+    siteId: after.siteId,
     before: { documentId: before.documentId, employeeTypeId: before.employeeTypeId, employmentStatus: before.employmentStatus },
     after: { documentId: after.documentId, employeeTypeId: after.employeeTypeId, employmentStatus: after.employmentStatus },
   });
@@ -573,7 +574,7 @@ export function decideNovelty(id: string, decision: "aprobada" | "rechazada", co
   getDb()
     .prepare("UPDATE novelties SET status = ?, decided_by = ?, decided_at = ?, decision_comment = ? WHERE id = ?")
     .run(decision, actor.email, now, comment?.trim() || null, id);
-  audit("novelty.decided", actor, { id, before: novelty.status, after: decision, comment: comment?.trim() || null, punchId: novelty.punchId });
+  audit("novelty.decided", actor, { id, employeeId: novelty.employeeId, siteId: novelty.siteId, before: novelty.status, after: decision, comment: comment?.trim() || null, punchId: novelty.punchId });
   return getNovelty(id)!;
 }
 

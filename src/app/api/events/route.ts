@@ -35,6 +35,24 @@ const LABEL: Record<string, string> = {
   "site.updated": "Sede actualizada",
   "ai.chat": "Consulta a IAnálisis",
   "ai.briefing": "Resumen del día generado",
+  // Ajuste «Aplicación Tiendas»
+  "employee.hr_updated": "Ficha laboral actualizada",
+  "employee_type.saved": "Tipo de jornada guardado",
+  "store_access.granted": "Tienda habilitada para marcar",
+  "store_access.revoked": "Tienda deshabilitada para marcar",
+  "mobility.authorized": "Movilidad autorizada",
+  "mobility.revoked": "Movilidad revocada",
+  "novelty.created": "Novedad registrada",
+  "novelty.decided": "Novedad aprobada o rechazada",
+  "novelty.urgent": "Novedad urgente pendiente",
+  "plan.opened": "Cronograma abierto",
+  "plan.updated": "Cronograma modificado",
+  "plan.submitted": "Cronograma enviado al regional",
+  "plan.decided": "Cronograma aprobado o devuelto",
+  "hours.exported": "Horas exportadas",
+  "hours.excess": "Exceso de horas detectado",
+  "punch.unauthorized_store": "Marcación en tienda no autorizada",
+  "site.hours_updated": "Horario de tienda cambiado",
 };
 
 const text = (v: unknown) => (typeof v === "string" && v ? v : null);
