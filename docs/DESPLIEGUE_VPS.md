@@ -153,7 +153,11 @@ Después de editar `.env.vps`: `docker compose -f docker-compose.vps.yml up -d` 
 | 2026-10-20 | `2f5c516` | `605c9f84f3e21804` | 16.4.0 | Nómina colombiana, alcance por sede, IAnálisis, kiosco sin internet | — |
 | 2026-11-12 | `ebb60f4` | `430c938fbcec1421` | 16.4.6 | Ajustes «Aplicación Tiendas» + corrección de vulnerabilidades de Next.js | — |
 
-## 9. Problemas frecuentes
+## 9. Servidor MCP (Claude y ChatGPT)
+
+Es un proyecto aparte (`mcp`, en `/root/reloj-mcp`, `timermcp.leia-softwarelab.tech`) y **no se redespliega junto con la app**: usa la API pública de Reloj CR. Procedimiento, variables y efectos del cambio de versión en [`docs/MCP.md`](MCP.md), sección 6.
+
+## 10. Problemas frecuentes
 
 | Síntoma | Causa probable | Qué hacer |
 | --- | --- | --- |

@@ -1,0 +1,27 @@
+# MCP de Reloj CR detrás de Traefik: https://timermcp.leia-softwarelab.tech/mcp
+# Uso (desde la raíz del despliegue):  docker compose -f mcp/docker-compose.yml --env-file mcp/.env up -d --build
+# Traefik corre en network_mode host: alcanza al contenedor por su IP en la red propia "reloj-mcp-net".
+services:
+  reloj-mcp:
+    build:
+      context: ..
+      dockerfile: mcp/Dockerfile
+    restart: unless-stopped
+    environment:
+      RELOJ_API_URL: ${RELOJ_API_URL:?URL interna o pública de Reloj CR}
+      RELOJ_API_KEY: ${RELOJ_API_KEY:-}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?}
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:-https://timermcp.leia-softwarelab.tech}
+    networks: [default]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=reloj-mcp-net
+      - traefik.http.routers.reloj-mcp.rule=Host(`timermcp.leia-softwarelab.tech`)
+      - traefik.http.routers.reloj-mcp.entrypoints=websecure
+      - traefik.http.routers.reloj-mcp.tls=true
+      - traefik.http.routers.reloj-mcp.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.reloj-mcp.loadbalancer.server.port=3333
+
+networks:
+  default:
+    name: reloj-mcp-net

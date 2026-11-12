@@ -5,3 +5,4 @@ data
 agent-tools
 *.md
 !README.md
+mcp/node_modules
