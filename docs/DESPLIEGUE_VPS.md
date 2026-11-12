@@ -155,7 +155,7 @@ Después de editar `.env.vps`: `docker compose -f docker-compose.vps.yml up -d` 
 
 ## 9. Servidor MCP (Claude y ChatGPT)
 
-Es un proyecto aparte (`mcp`, en `/root/reloj-mcp`, `timermcp.leia-softwarelab.tech`) y **no se redespliega junto con la app**: usa la API pública de Reloj CR. Procedimiento, variables y efectos del cambio de versión en [`docs/MCP.md`](MCP.md), sección 6.
+Es un proyecto aparte (`mcp`, `timermcp.leia-softwarelab.tech`; tras la versión 2 se lanza desde el clon `/opt/reloj-mcp`) y **no se redespliega junto con la app**: usa la API pública de Reloj CR. Procedimiento, variables y efectos del cambio de versión en [`docs/MCP.md`](MCP.md), sección 6.
 
 ## 10. Problemas frecuentes
 

@@ -110,38 +110,40 @@ Si su cuenta tiene TOTP agregue `RELOJ_TOTP`, pero cambia cada 30 s: para esas c
 
 ## 6. Despliegue en el VPS
 
-Proyecto Docker `mcp` (contenedor `mcp-reloj-mcp-1`) en `/root/reloj-mcp`, publicado por Traefik en `timermcp.leia-softwarelab.tech`. Es independiente de la app: **no hace falta redesplegar Reloj CR**, porque no se agregó ninguna ruta a su API. Requiere SSH al VPS (`ssh root@2.24.97.152`).
+Proyecto Docker `mcp` (contenedor `mcp-reloj-mcp-1`), hoy lanzado desde `/root/reloj-mcp` (archivos copiados, sin git) y, tras el despliegue de la versión 2, desde el clon `/opt/reloj-mcp`, publicado por Traefik en `timermcp.leia-softwarelab.tech`. Es independiente de la app: **no hace falta redesplegar Reloj CR**, porque no se agregó ninguna ruta a su API. Requiere SSH al VPS (`ssh root@2.24.97.152`).
 
 > **Antes de empezar, dos trampas conocidas del `.env` actual** (`/root/reloj-mcp/mcp/.env`, no versionado):
-> 1. Puede traer la línea literal `TRAEFIK_CERTRESOLVER=<nombre-resolver>`. El compose nuevo la **usa** como nombre del resolutor de certificados: si queda así, el sitio pierde el HTTPS. Bórrela (el valor por defecto es `letsencrypt`, que es el que usa hoy).
+> 1. Trae la línea literal `TRAEFIK_CERTRESOLVER=<nombre-resolver>`. El compose nuevo la **usa** como nombre del resolutor de certificados: si queda así, el sitio pierde el HTTPS. Bórrela (el valor por defecto es `letsencrypt`, que es el que usa hoy).
 > 2. Puede traer `RELOJ_API_KEY` con el valor de fábrica publicado. Reloj CR **ignora** esa clave en producción y el MCP v2 no la necesita para escribir ni para el acceso con usuario: bórrela.
 >
 > Además, **rote `MCP_AUTH_TOKEN`**: cifra las sesiones y ahora exige 32+ caracteres. Aprovechar este despliegue evita arrastrar un valor que ya circuló en texto plano (por ejemplo, en la API de Hostinger o en un chat).
 
-### Paso 1 · Estado y respaldo del `.env`
+### Paso 1 · Ver cómo está instalado hoy
+`/root/reloj-mcp` puede no ser un clon de git (archivos copiados a mano): no se asume. Se despliega desde un **clon nuevo** y la carpeta actual queda **intacta**, que es su vuelta atrás.
 ```bash
-cd /root/reloj-mcp && git status --short && git branch --show-current && git log -1 --oneline
+ls -la /root/reloj-mcp /root/reloj-mcp/mcp
+docker inspect mcp-reloj-mcp-1 --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}'
 ```
-Debe mostrar solo `?? mcp/.env`. Anote el commit: es su vuelta atrás.
-```bash
-cp mcp/.env mcp/.env.bak
-```
+Debe existir `/root/reloj-mcp/mcp/.env` (y `docker-compose.yml`). La segunda línea confirma de qué carpeta se lanzó el contenedor.
 
-### Paso 2 · Corregir `mcp/.env`
+### Paso 2 · Clon nuevo y `.env` corregido (sin tocar el original)
 ```bash
+git clone --branch claude/tiendas-sobre-produccion --single-branch https://github.com/anzaja72/RELOJACCESO.git /opt/reloj-mcp
+cp /root/reloj-mcp/mcp/.env /opt/reloj-mcp/mcp/.env
+cd /opt/reloj-mcp
 sed -i '/^TRAEFIK_CERTRESOLVER=/d;/^RELOJ_API_KEY=/d' mcp/.env
 sed -i "s/^MCP_AUTH_TOKEN=.*/MCP_AUTH_TOKEN=$(openssl rand -hex 32)/" mcp/.env
 sed -i 's#^RELOJ_API_URL=.*#RELOJ_API_URL=https://reloj.leia-softwarelab.tech#' mcp/.env
 sed 's/\(MCP_AUTH_TOKEN=\).*/\1<oculto>/' mcp/.env
 ```
-La última línea muestra el archivo sin revelar el token. Debe contener solo `RELOJ_API_URL` y `MCP_AUTH_TOKEN`. (Si necesita el token para Claude Code, léalo con `grep ^MCP_AUTH_TOKEN mcp/.env` en su propia terminal.)
+La última línea muestra el archivo sin revelar el token y debe contener solo `RELOJ_API_URL` y `MCP_AUTH_TOKEN`. (Si necesita el token para Claude Code, léalo con `grep ^MCP_AUTH_TOKEN /opt/reloj-mcp/mcp/.env` en su propia terminal.) El `.env` original en `/root/reloj-mcp/mcp/` **no se modifica**.
 
-### Paso 3 · Traer el código y reconstruir
+### Paso 3 · Reconstruir desde el clon nuevo
 ```bash
-git fetch --all --prune && git checkout claude/tiendas-sobre-produccion && git pull
+cd /opt/reloj-mcp
 docker compose -f mcp/docker-compose.yml --env-file mcp/.env up -d --build
 ```
-Hay unos segundos sin servicio al recrear el contenedor.
+El proyecto se llama igual (`mcp`) porque lo define la carpeta del compose, así que **reemplaza** al contenedor actual `mcp-reloj-mcp-1` y reutiliza la red `reloj-mcp-net`. Hay unos segundos sin servicio.
 
 ### Paso 4 · Verificación
 ```bash
@@ -163,13 +165,12 @@ Debe terminar con «✔ El servidor MCP desplegado es la versión 2 y está prot
 Vuelva a conectar el conector en Claude y en ChatGPT (sección 4) y ejecute la guía [`PRUEBAS_MCP.md`](PRUEBAS_MCP.md). Los conectores anteriores dejan de funcionar y deben autorizarse de nuevo.
 
 ### Vuelta atrás
+La carpeta original no se tocó, así que basta con relanzar desde ella (con su `.env` y su compose anteriores):
 ```bash
 cd /root/reloj-mcp
-git checkout <commit-anotado-en-el-paso-1>
-cp mcp/.env.bak mcp/.env
 docker compose -f mcp/docker-compose.yml --env-file mcp/.env up -d --build
 ```
-Si restaura el `.env` anterior, restaure también el compose anterior (el commit del paso 1): el compose nuevo lee `TRAEFIK_CERTRESOLVER`.
+Cuando el despliegue nuevo esté probado y estable, puede archivar la carpeta vieja (`mv /root/reloj-mcp /root/reloj-mcp.viejo`). Las futuras actualizaciones son simplemente `cd /opt/reloj-mcp && git pull` seguido del `docker compose … up -d --build` del paso 3.
 
 ## 7. Pruebas
 
