@@ -23,6 +23,8 @@ export const todayLocal = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ 
 
 export function mondayOf(date) {
   const d = new Date(`${date}T12:00:00Z`);
+  // «2026-02-31» pasa la forma AAAA-MM-DD pero no es una fecha: no se corrige en silencio.
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== date) throw new Error(`Fecha inválida: «${date}». Use una fecha real en formato AAAA-MM-DD.`);
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }

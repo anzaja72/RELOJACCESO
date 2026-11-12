@@ -384,6 +384,18 @@ describe("Acciones con la identidad del usuario", () => {
     await c.close();
   });
 
+  test("una fecha inexistente se rechaza con un mensaje claro, sin llamar a Reloj", async () => {
+    const c = await connect((await login("gerente@t")).access_token);
+    requests.length = 0;
+    const r = await call(c, "ver_cronograma", { sede: "BAQ-BV", semana: "2026-02-31" });
+    assert.ok(r.isError);
+    assert.match(text(r), /Fecha inválida/);
+    assert.ok(!requests.some((x) => x.path === "plans"));
+    const ok = await call(c, "ver_cronograma", { sede: "BAQ-BV", semana: "2026-11-12" });
+    assert.ok(!ok.isError);
+    await c.close();
+  });
+
   test("mi_perfil muestra el rol y los permisos del usuario", async () => {
     const c = await connect((await login("gerente@t")).access_token);
     const perfil = JSON.parse(text(await call(c, "mi_perfil", {})));
