@@ -1,0 +1,30 @@
+// Prueba la lógica de assets/encargados.html con tres tiendas de ejemplo: node scripts/validar.test.mjs
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const html = readFileSync(new URL("../assets/encargados.html", import.meta.url), "utf8");
+const logica = html.split("// ===LOGICA===")[1].split("\n").slice(1).join("\n").split("// ===FIN LOGICA===")[0];
+const { analizarRegion } = new Function(`${logica}; return { analizarRegion };`)();
+const vistas = JSON.parse(readFileSync(new URL("./ejemplo-region.json", import.meta.url), "utf8"));
+const a = analizarRegion(vistas);
+
+const persona = (n) => a.filas.find((f) => f.p.e.nombre === n);
+const tienda = (n) => a.filasTienda.find((f) => f.t.nombre === n);
+assert.equal(a.mes, "NOVIEMBRE");
+const leidy = persona("LEIDY DIAZ");
+assert.deepEqual(leidy.celdas.map((c) => (c.tipo === "tienda" ? c.tienda.nombre : c.tipo)), ["off", "Alto Prado", "Alto Prado", "Buenavista", "Buenavista", "Buenavista", "Buenavista"], "relevo: descanso, 2 días en Alto Prado, resto en su tienda");
+assert.equal(leidy.neto, 42 * 60);
+assert.equal(leidy.mal, false);
+assert.equal(persona("YESICA ARROYO").celdas.every((c) => c.tipo === "novedad" && c.clase === "vac"), true);
+assert.equal(persona("YESICA ARROYO").mal, false, "vacaciones toda la semana: no se le exigen horas");
+const bvJueves = tienda("Buenavista").celdas[3];
+assert.equal(bvJueves.tipo, "d", "jueves: descanso del gerente de Buenavista");
+assert.deepEqual(bvJueves.cubren, ["HERMINIA", "LEIDY"]);
+assert.equal(tienda("Alto Prado").celdas[0].tipo, "d");
+assert.ok(a.problemas.includes("Alto Prado: nadie encargado (gerente o coordinador) el lunes 09."));
+assert.ok(a.problemas.includes("Caribe Plaza: nadie encargado (gerente o coordinador) el lunes 09."));
+assert.ok(a.problemas.some((p) => /HERMINIA ROJAS: el domingo 15 tiene turno en Buenavista y Alto Prado a la vez/.test(p)), "nadie puede estar en dos tiendas el mismo día");
+assert.ok(a.problemas.some((p) => /Alto Prado: sin gerente ni coordinador el lunes 09 de 08:00-23:00/.test(p)));
+assert.ok(a.problemas.some((p) => /DARIO MENDEZ: 24 h en la semana; su jornada pide 42 h/.test(p)));
+assert.ok(!a.problemas.some((p) => /LEIDY/.test(p)), "Leidy está completa");
+console.log(`ok · ${a.problemas.length} por corregir`);
+a.problemas.forEach((p) => console.log("  ✗", p));

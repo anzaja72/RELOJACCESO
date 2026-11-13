@@ -20,6 +20,10 @@ El conector **Reloj CR** debe estar conectado con el usuario del gerente. Las he
 5. **Validar y mostrar.** Con la respuesta de `guardar_turnos` o de un `ver_cronograma` nuevo, arme la vista (sección «Vista») y escriba debajo un resumen corto: qué quedó, qué falta y una propuesta concreta para cada pendiente.
 6. **Enviar.** Solo cuando el gerente lo pida o acepte, y sin pendientes de «Por corregir», o con su aceptación explícita de los que queden. Llame `enviar_cronograma` con `confirmado: true`. Después ya no se puede editar.
 
+Los turnos de gerente y coordinadores, y los relevos que vienen de otra tienda, suelen ponerlos el gerente regional (skill «cronograma-encargados»). No los cambie salvo que el gerente lo pida expresamente, y avísele que el regional los verá cambiados.
+
+Cuando el regional aprueba el cronograma, Reloj mide contra esos turnos las llegadas tarde (desde la hora de entrada) y el tiempo de almuerzo de cada persona. Por eso cada turno debe llevar su hora real de entrada y su almuerzo.
+
 Repita 3–5 con cada nuevo mensaje. Muestre siempre la vista actualizada: el gerente revisa mirando la grilla, no leyendo listas.
 
 ## Notación de la tienda (cómo hablan y escriben los gerentes)

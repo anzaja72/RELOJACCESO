@@ -1,0 +1,233 @@
+[
+ {
+  "tienda": "Buenavista (BV, Barranquilla)",
+  "tienda_id": "site_bv",
+  "semana": {
+   "inicia": "2026-11-09",
+   "dias": [
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15"
+   ]
+  },
+  "horario_tienda": {
+   "apertura": "08:00",
+   "cierre": "23:00",
+   "confirmado": true
+  },
+  "cronograma": {
+   "estado": "borrador",
+   "version": 1
+  },
+  "empleados": [
+   {
+    "id": "e_dario",
+    "codigo": "BV-01",
+    "nombre": "DARIO MENDEZ",
+    "cargo": "Gerente",
+    "tipo_jornada": "Gerente",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-09": "07:00-16:00 · almuerzo 60 min",
+     "2026-11-10": "07:00-16:00 · almuerzo 60 min",
+     "2026-11-11": "07:00-16:00 · almuerzo 60 min",
+     "2026-11-12": "descanso",
+     "2026-11-13": "descanso",
+     "2026-11-14": "descanso",
+     "2026-11-15": "descanso"
+    }
+   },
+   {
+    "id": "e_herminia",
+    "codigo": "BV-02",
+    "nombre": "HERMINIA ROJAS",
+    "cargo": "Coordinadora",
+    "tipo_jornada": "Coordinadora",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-09": "descanso",
+     "2026-11-10": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-11": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-12": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-13": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-14": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-15": "14:00-22:00 · almuerzo 60 min"
+    }
+   },
+   {
+    "id": "e_leidy",
+    "codigo": "BV-03",
+    "nombre": "LEIDY DIAZ",
+    "cargo": "Coordinadora",
+    "tipo_jornada": "Coordinadora",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-09": "descanso",
+     "2026-11-12": "07:00-15:00 · almuerzo 60 min",
+     "2026-11-13": "07:00-15:00 · almuerzo 60 min",
+     "2026-11-14": "07:00-15:00 · almuerzo 60 min",
+     "2026-11-15": "07:00-15:00 · almuerzo 60 min"
+    },
+    "en_otra_tienda": [
+     "2026-11-10 en Alto Prado",
+     "2026-11-11 en Alto Prado"
+    ]
+   }
+  ],
+  "novedades": [],
+  "franjas_sin_responsable": [],
+  "advertencias": []
+ },
+ {
+  "tienda": "Alto Prado (AP, Barranquilla)",
+  "tienda_id": "site_ap",
+  "semana": {
+   "inicia": "2026-11-09",
+   "dias": [
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15"
+   ]
+  },
+  "horario_tienda": {
+   "apertura": "08:00",
+   "cierre": "23:00",
+   "confirmado": true
+  },
+  "cronograma": {
+   "estado": "borrador",
+   "version": 1
+  },
+  "empleados": [
+   {
+    "id": "e_rosa",
+    "codigo": "AP-01",
+    "nombre": "ROSA PEREZ",
+    "cargo": "Gerente",
+    "tipo_jornada": "Gerente",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-09": "descanso",
+     "2026-11-10": "descanso",
+     "2026-11-11": "descanso",
+     "2026-11-12": "08:00-17:30 · almuerzo 60 min",
+     "2026-11-13": "08:00-17:30 · almuerzo 60 min",
+     "2026-11-14": "08:00-17:30 · almuerzo 60 min",
+     "2026-11-15": "08:00-17:30 · almuerzo 60 min"
+    }
+   },
+   {
+    "id": "e_leidy",
+    "codigo": "BV-03",
+    "nombre": "LEIDY DIAZ",
+    "cargo": "Coordinadora",
+    "tipo_jornada": "Coordinadora",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-10": "14:00-22:00 · almuerzo 60 min",
+     "2026-11-11": "14:00-22:00 · almuerzo 60 min"
+    },
+    "prestado_desde": "Buenavista (solo 2026-11-10, 2026-11-11)"
+   },
+   {
+    "id": "e_herminia",
+    "codigo": "BV-02",
+    "nombre": "HERMINIA ROJAS",
+    "cargo": "Coordinadora",
+    "tipo_jornada": "Coordinadora",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-15": "08:00-16:00 · almuerzo 60 min"
+    },
+    "prestado_desde": "Buenavista (solo 2026-11-15)"
+   }
+  ],
+  "novedades": [],
+  "franjas_sin_responsable": [
+   "2026-11-09 08:00-23:00"
+  ],
+  "advertencias": []
+ },
+ {
+  "tienda": "Caribe Plaza (CP, Barranquilla)",
+  "tienda_id": "site_cp",
+  "semana": {
+   "inicia": "2026-11-09",
+   "dias": [
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15"
+   ]
+  },
+  "horario_tienda": {
+   "apertura": "08:00",
+   "cierre": "23:00",
+   "confirmado": true
+  },
+  "cronograma": {
+   "estado": "borrador",
+   "version": 1
+  },
+  "empleados": [
+   {
+    "id": "e_carlos",
+    "codigo": "CP-01",
+    "nombre": "CARLOS RUIZ",
+    "cargo": "Gerente",
+    "tipo_jornada": "Gerente",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {
+     "2026-11-09": "descanso",
+     "2026-11-10": "descanso",
+     "2026-11-11": "12:00-20:00 · almuerzo 30 min",
+     "2026-11-12": "12:00-20:00 · almuerzo 30 min",
+     "2026-11-13": "12:00-20:00 · almuerzo 30 min",
+     "2026-11-14": "12:00-20:00 · almuerzo 30 min",
+     "2026-11-15": "12:00-20:00 · almuerzo 30 min"
+    }
+   },
+   {
+    "id": "e_yesica",
+    "codigo": "CP-02",
+    "nombre": "YESICA ARROYO",
+    "cargo": "Coordinadora",
+    "tipo_jornada": "Coordinadora",
+    "responsable_de_turno": true,
+    "jornada_referencia_h": 42,
+    "horas_programadas": "",
+    "turnos": {}
+   }
+  ],
+  "novedades": [
+   "YESICA ARROYO: vacaciones 2026-11-09→2026-11-15 (registrada)"
+  ],
+  "franjas_sin_responsable": [],
+  "advertencias": []
+ }
+]

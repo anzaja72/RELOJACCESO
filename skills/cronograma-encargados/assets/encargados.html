@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Encargados de la región</title>
+<style>
+  :root {
+    --ink: #1f1f1f; --muted: #666; --line: #000; --soft: #c9c9c9; --bg: #fff;
+    --red: #c00000; --green: #00a651; --home: #dbe5f1; --away: #fce4d6; --sick: #fff2cc; --vac: #ddebf7;
+    --empty: #fde2e2; --ok: #2e7d32; --warn: #b26a00; --bad: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 13px/1.3 "Bebas Neue", "Arial Narrow", Arial, sans-serif; }
+  .sub { color: var(--muted); margin: 2px 0 12px; font-family: Calibri, Arial, sans-serif; }
+  .estado { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; font-family: Calibri, Arial, sans-serif; font-weight: 600; }
+  .estado.ok { background: #e6f4ea; color: var(--ok); } .estado.bad { background: #fde7e7; color: var(--bad); }
+  .wrap { overflow-x: auto; margin-bottom: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; border: 2px solid var(--line); }
+  th, td { border: 1px solid var(--soft); padding: 4px 6px; text-align: center; font-weight: 700; white-space: nowrap; }
+  th { border-color: var(--line); }
+  th.mes { color: var(--red); font-size: 20px; width: 170px; }
+  td.fila { text-align: center; min-width: 160px; border-right: 2px solid var(--line); }
+  td.fila small { display: block; font-weight: 400; color: var(--muted); font-size: 10px; font-family: Calibri, Arial, sans-serif; }
+  td.d { color: var(--red); }
+  td.d small, td.casa small, td.fuera small { display: block; font-weight: 400; font-size: 10px; color: var(--muted); font-family: Calibri, Arial, sans-serif; }
+  td.casa { background: var(--home); color: var(--red); }
+  td.fuera { background: var(--away); color: var(--green); }
+  td.off { background: var(--away); color: var(--red); }
+  td.inc { background: var(--sick); color: var(--red); }
+  td.vac { background: var(--vac); color: var(--red); }
+  td.nov { background: var(--sick); color: var(--red); }
+  td.vacio { background: var(--empty); color: var(--bad); }
+  td.sinenc { background: var(--empty); color: var(--bad); }
+  td.choque { box-shadow: inset 0 0 0 2px var(--bad); }
+  td.tot { min-width: 54px; border-left: 2px solid var(--line); }
+  td.tot.mal { color: var(--bad); background: var(--empty); }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 12px; font: 12px Calibri, Arial, sans-serif; color: var(--muted); margin: -4px 0 12px; }
+  .leyenda span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; border: 1px solid var(--soft); background: var(--c); }
+  .validacion { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); font-family: Calibri, Arial, sans-serif; }
+  .bloque { border: 1px solid var(--soft); border-radius: 8px; padding: 10px 12px; }
+  .bloque h2 { font-size: 14px; margin: 0 0 6px; } .bloque.bad h2 { color: var(--bad); } .bloque.warn h2 { color: var(--warn); } .bloque.ok h2 { color: var(--ok); }
+  .bloque ul { margin: 0; padding-left: 18px; } .bloque li { margin: 2px 0; }
+  @media print { body { padding: 0; } table { min-width: 0; font-size: 10px; } @page { size: landscape; margin: 8mm; } }
+</style>
+</head>
+<body>
+<div id="app">Cargando…</div>
+<script>
+/* Pegue aquí, sin cambiarlas, las respuestas de ver_cronograma de CADA tienda de la región para la misma semana: [ {…}, {…} ]. */
+const DATOS = /*DATOS*/ null /*FIN_DATOS*/;
+
+// ===LOGICA=== (funciones puras: se prueban con node)
+const DIAS = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO", "DOMINGO"];
+const MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+const TOLERANCIA_MIN = 30;
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (x) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[x]);
+const aMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
+const hora = (min) => { const h = Math.floor(min / 60), m = min % 60; return m ? `${h}:${String(m).padStart(2, "0")}` : String(h); };
+const horasTxt = (min) => { const h = min / 60; return Number.isInteger(h) ? String(h) : h.toFixed(1).replace(".", ","); };
+const diaTxt = (dias, d) => `${DIAS[dias.indexOf(d)]?.toLowerCase() ?? d} ${d.slice(8)}`;
+const nombreTienda = (t) => String(t).replace(/\s*\(.*$/, "");
+
+function leerTurno(txt) {
+  const t = String(txt ?? "").trim();
+  if (!t) return null;
+  if (/^descanso$/i.test(t)) return { tipo: "descanso" };
+  const nov = t.match(/^novedad(?:\s*\((.*)\))?$/i);
+  if (nov) return { tipo: "novedad", texto: (nov[1] || "NOVEDAD").trim() };
+  const m = t.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})(.*)$/);
+  if (!m) return { tipo: "desconocido", texto: t };
+  const ini = aMin(m[1]);
+  let fin = aMin(m[2]);
+  if (fin <= ini) fin += 1440;
+  const alm = (m[3] || "").match(/almuerzo\s+(\d+)\s*min/i);
+  return { tipo: "turno", ini, fin, neto: fin - ini - (alm ? Number(alm[1]) : 0) };
+}
+
+function leerNovedades(lista) {
+  return (lista || []).map((s) => {
+    const m = String(s).match(/^(.*):\s*(\S+)\s+(\d{4}-\d{2}-\d{2})→(\d{4}-\d{2}-\d{2})\s*\((.*)\)$/);
+    return m ? { nombre: m[1].trim(), tipo: m[2], desde: m[3], hasta: m[4], estado: m[5] } : null;
+  }).filter((n) => n && !/rechaz|anulad/i.test(n.estado));
+}
+const claseNovedad = (tipo) => (/vacac/i.test(tipo) ? "vac" : /incap/i.test(tipo) ? "inc" : "nov");
+const esGerente = (e) => /gerente/i.test(`${e.cargo ?? ""} ${e.tipo_jornada ?? ""}`);
+
+/** vistas = respuestas de ver_cronograma (una por tienda). Devuelve tiendas, personas y validación. */
+function analizarRegion(vistas) {
+  const dias = vistas[0].semana.dias;
+  const problemas = [], avisos = [];
+  for (const v of vistas) if (v.semana.inicia !== vistas[0].semana.inicia) problemas.push(`${nombreTienda(v.tienda)} es de otra semana (${v.semana.inicia}).`);
+  const tiendas = vistas.map((v, i) => ({ i, nombre: nombreTienda(v.tienda), v, novedades: leerNovedades(v.novedades) }));
+
+  // Personas = responsables de turno (gerentes y coordinadores), unidas por id entre tiendas.
+  const personas = new Map();
+  for (const t of tiendas) for (const e of t.v.empleados) {
+    if (!e.responsable_de_turno) continue;
+    const p = personas.get(e.id) ?? { id: e.id, e, base: null, filas: [] };
+    p.filas.push({ t, e });
+    if (!e.prestado_desde) { p.base = t; p.e = e; }
+    personas.set(e.id, p);
+  }
+
+  const filas = [...personas.values()].map((p) => {
+    let neto = 0, descansos = 0, diasNovedad = 0, turnos = 0;
+    const baseE = p.base ? p.filas.find((f) => f.t === p.base).e : null;
+    const celdas = dias.map((d) => {
+      const enTurno = p.filas.map((f) => ({ t: f.t, c: leerTurno(f.e.turnos?.[d]) })).filter((x) => x.c?.tipo === "turno");
+      if (enTurno.length) {
+        const { t, c } = enTurno[0];
+        turnos += 1; neto += c.neto;
+        if (enTurno.length > 1) problemas.push(`${p.e.nombre}: el ${diaTxt(dias, d)} tiene turno en ${enTurno.map((x) => x.t.nombre).join(" y ")} a la vez.`);
+        return { tipo: "tienda", tienda: t, casa: t === p.base, ini: c.ini, fin: c.fin, choque: enTurno.length > 1 };
+      }
+      const c = baseE ? leerTurno(baseE.turnos?.[d]) : null;
+      const nov = p.base?.novedades.find((n) => n.nombre === p.e.nombre && n.desde <= d && d <= n.hasta);
+      if (c?.tipo === "descanso") { descansos += 1; return { tipo: "off" }; }
+      if (c?.tipo === "novedad") { diasNovedad += 1; return { tipo: "novedad", texto: c.texto, clase: claseNovedad(c.texto) }; }
+      if (nov) { diasNovedad += 1; return { tipo: "novedad", texto: nov.tipo, clase: claseNovedad(nov.tipo) }; }
+      const lejos = (baseE?.en_otra_tienda || []).map((s) => String(s).match(/^(\d{4}-\d{2}-\d{2}) en (.*)$/)).find((m) => m && m[1] === d);
+      if (lejos) {
+        const cargada = tiendas.some((t) => t.nombre === nombreTienda(lejos[2]));
+        if (cargada) problemas.push(`${p.e.nombre}: va a ${lejos[2]} el ${diaTxt(dias, d)} pero no tiene horario allá.`);
+        return { tipo: "tienda", tienda: { nombre: lejos[2] }, casa: false, sinHorario: true };
+      }
+      if (!p.base) return { tipo: "fuera" };
+      problemas.push(`${p.e.nombre}: el ${diaTxt(dias, d)} está sin asignar (tienda, descanso o novedad).`);
+      return { tipo: "vacio" };
+    });
+    let esperado = null, mal = false;
+    const ref = baseE?.jornada_referencia_h;
+    if (typeof ref === "number") {
+      esperado = Math.max(0, ref * 60 - Math.min(diasNovedad, 6) * 7 * 60);
+      if (Math.abs(neto - esperado) > TOLERANCIA_MIN) { mal = true; problemas.push(`${p.e.nombre}: ${horasTxt(neto)} h en la semana; su jornada pide ${horasTxt(esperado)} h.`); }
+    }
+    if (p.base && turnos === 7) problemas.push(`${p.e.nombre}: no tiene día de descanso en la semana.`);
+    return { p, celdas, neto, mal, gerente: esGerente(p.e), tiendaBase: p.base?.nombre ?? "" };
+  });
+
+  // Tiendas: D = descanso (o novedad) de su gerente; además, cada día debe haber al menos un encargado en turno.
+  const filasTienda = tiendas.map((t) => {
+    const gerentes = filas.filter((f) => f.p.base === t && f.gerente);
+    const celdas = dias.map((d, i) => {
+      const cubren = filas.filter((f) => f.celdas[i].tipo === "tienda" && f.celdas[i].tienda === t).map((f) => f.p.e.nombre.split(" ")[0]);
+      const fuera = gerentes.filter((g) => ["off", "novedad"].includes(g.celdas[i].tipo));
+      if (!cubren.length) problemas.push(`${t.nombre}: nadie encargado (gerente o coordinador) el ${diaTxt(dias, d)}.`);
+      if (!fuera.length) return { tipo: cubren.length ? "normal" : "sinenc", cubren };
+      const g = fuera[0].celdas[i];
+      return { tipo: "d", texto: g.tipo === "off" ? "D" : `${fuera[0].p.e.nombre.split(" ")[0]} ${g.texto}`.toUpperCase(), cubren };
+    });
+    for (const f of t.v.franjas_sin_responsable || []) {
+      const m = String(f).match(/^(\d{4}-\d{2}-\d{2}) (.*)$/);
+      problemas.push(`${t.nombre}: sin gerente ni coordinador el ${m ? `${diaTxt(dias, m[1])} de ${m[2]}` : f}.`);
+    }
+    return { t, celdas };
+  });
+
+  const mes = MESES[Number(dias[0].slice(5, 7)) - 1];
+  filas.sort((a, b) => (a.tiendaBase || "~").localeCompare(b.tiendaBase || "~") || Number(b.gerente) - Number(a.gerente));
+  return { dias, mes, filasTienda, filas, problemas: [...new Set(problemas)], avisos, ok: problemas.length === 0 };
+}
+// ===FIN LOGICA===
+
+function mismo(a, b) {
+  if (a.tipo !== b.tipo) return false;
+  if (a.tipo === "tienda") return a.tienda.nombre === b.tienda.nombre && a.ini === b.ini && a.fin === b.fin && !a.choque && !b.choque;
+  if (a.tipo === "novedad") return a.texto === b.texto;
+  return a.tipo === "off" || a.tipo === "vacio";
+}
+
+function celdasPersona(celdas) {
+  let out = "";
+  for (let i = 0; i < celdas.length; ) {
+    let j = i + 1;
+    while (j < celdas.length && mismo(celdas[i], celdas[j])) j += 1;
+    const c = celdas[i], span = j - i > 1 ? ` colspan="${j - i}"` : "";
+    if (c.tipo === "tienda") {
+      const horas = c.sinHorario ? "sin horario" : `${hora(c.ini)}–${hora(c.fin)}`;
+      out += `<td${span} class="${c.casa ? "casa" : "fuera"}${c.choque ? " choque" : ""}">${esc(span ? c.tienda.nombre.toUpperCase() : c.tienda.nombre)}<small>${horas}</small></td>`;
+    } else if (c.tipo === "off") out += `<td${span} class="off">${span ? "OFF" : "D"}</td>`;
+    else if (c.tipo === "novedad") out += `<td${span} class="${c.clase}">${esc(c.texto.toUpperCase())}</td>`;
+    else if (c.tipo === "vacio") out += `<td${span} class="vacio">SIN ASIGNAR</td>`;
+    else out += `<td${span}></td>`;
+    i = j;
+  }
+  return out;
+}
+
+function render(vistas) {
+  const app = document.getElementById("app");
+  if (!vistas || !vistas.length) { app.textContent = "Sin datos: pegue en DATOS las respuestas de ver_cronograma de las tiendas."; return; }
+  const a = analizarRegion(vistas);
+  const cab = `<tr><th class="mes" rowspan="2">${a.mes}</th>${DIAS.map((n) => `<th>${n}</th>`).join("")}<th rowspan="2">HORAS</th></tr><tr>${a.dias.map((d) => `<th>${Number(d.slice(8))}</th>`).join("")}</tr>`;
+  let html = `<h1 style="margin:0;font-size:20px">Encargados de la región${a.ok ? `<span class="estado ok">Sin pendientes</span>` : `<span class="estado bad">${a.problemas.length} por corregir</span>`}</h1>
+    <div class="sub">Semana del ${a.dias[0]} al ${a.dias[6]} · ${a.filasTienda.map((f) => `${esc(f.t.nombre)}: ${f.t.v.cronograma ? `v${f.t.v.cronograma.version} ${f.t.v.cronograma.estado}` : "sin cronograma"}`).join(" · ")}</div>`;
+  html += `<div class="wrap"><table><thead>${cab}</thead><tbody>`;
+  for (const f of a.filasTienda) {
+    html += `<tr><td class="fila">${esc(f.t.nombre.toUpperCase())}</td>${f.celdas.map((c) => {
+      const quien = c.cubren.length ? `<small>${esc(c.cubren.join(", "))}</small>` : "<small>sin encargado</small>";
+      if (c.tipo === "d") return `<td class="d${c.cubren.length ? "" : " sinenc"}">${esc(c.texto)}${quien}</td>`;
+      if (c.tipo === "sinenc") return `<td class="sinenc">SIN ENCARGADO</td>`;
+      return `<td></td>`;
+    }).join("")}<td class="tot"></td></tr>`;
+  }
+  html += `</tbody></table></div><div class="wrap"><table><thead>${cab}</thead><tbody>`;
+  for (const f of a.filas) {
+    html += `<tr><td class="fila">${esc(f.p.e.nombre)}<small>${esc([f.p.e.cargo, f.tiendaBase].filter(Boolean).join(" · "))}</small></td>${celdasPersona(f.celdas)}<td class="tot${f.mal ? " mal" : ""}">${horasTxt(f.neto)}</td></tr>`;
+  }
+  html += `</tbody></table></div>`;
+  html += `<div class="leyenda"><span style="--c:var(--home)">En su tienda</span><span style="--c:var(--away)">Relevo en otra tienda / OFF</span><span style="--c:var(--vac)">Vacaciones</span><span style="--c:var(--sick)">Incapacidad u otra novedad</span><span style="--c:var(--empty)">Sin asignar</span><span>D = descanso del gerente de la tienda (debajo, quién la cubre) · horas netas sin almuerzo · 26 = 2:00 a. m.</span></div>`;
+  const lista = (xs) => `<ul>${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  html += `<div class="validacion">${a.problemas.length ? `<div class="bloque bad"><h2>Por corregir (${a.problemas.length})</h2>${lista(a.problemas)}</div>` : `<div class="bloque ok"><h2>Sin pendientes</h2><p>Todas las tiendas tienen encargado cada día, todos tienen descanso y sus horas cuadran.</p></div>`}${a.avisos.length ? `<div class="bloque warn"><h2>Para revisar</h2>${lista(a.avisos)}</div>` : ""}</div>`;
+  app.innerHTML = html;
+}
+
+if (typeof document !== "undefined") render(DATOS);
+</script>
+</body>
+</html>
