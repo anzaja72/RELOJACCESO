@@ -2,6 +2,8 @@
 const TOKEN_KEY = "reloj-cr-terminal-token";
 const ID_KEY = "reloj-cr-terminal-id";
 const SITE_KEY = "reloj-cr-terminal-site";
+// «tienda»: la tablet se abrió desde /kiosco y solo muestra la captura (sin menú ni otras pantallas).
+const MODE_KEY = "reloj-cr-kiosk-mode";
 
 export type TerminalBinding = { token: string; terminalId: string; siteId: string };
 
@@ -22,6 +24,15 @@ export function setTerminal(binding: TerminalBinding) {
 export function clearTerminal() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(SITE_KEY);
+}
+
+export function isStoreKiosk() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(MODE_KEY) === "tienda";
+}
+
+export function setStoreKiosk() {
+  window.localStorage.setItem(MODE_KEY, "tienda");
 }
 
 export function getTerminalId() {

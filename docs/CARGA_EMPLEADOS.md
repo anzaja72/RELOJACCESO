@@ -30,6 +30,19 @@ Después de cargar, cada empleado aparece en *Personas* con su tipo de jornada y
 - Cargar a una persona **no** enrola su rostro ni da su consentimiento: el consentimiento biométrico se registra al enrolar en *Enrolar*.
 - No carga **salarios**: se fijan por separado (Personas, con RR. HH.).
 
+## Kiosco de tienda (tablet solo para marcar)
+
+Cada tienda puede tener un **usuario de kiosco**. Ese usuario **no entra a la app, a la API ni al MCP**: su contraseña solo sirve para activar la tablet de su tienda, y la tablet solo puede marcar Entrada y Salida.
+
+Crear el usuario (en el VPS; imprime la contraseña una vez):
+```bash
+PW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-12); docker exec -e NEW_USER_PASSWORD="$PW" reloj-cr node scripts/create-user.mjs --email kiosco.ap@reloj.cr --name "Kiosco Alto Prado" --role kiosk --scope-type site --scope-id site_ap && echo "Contraseña kiosco AP: $PW"
+```
+
+En la tablet: abrir `https://<dominio>/kiosco`, escribir la tienda (`AP` o `Alto Prado`) y la contraseña. Queda en modo tienda: solo la captura, sin menú, y funciona sin internet. Cualquier otra pantalla pide iniciar sesión. Para quitar una tablet, revóquela en Operación › Terminales.
+
+La captura reconoce solo a quien esté **enrolado** (rostro registrado en Enrolar por el gerente o coordinador).
+
 ## Limpiar los datos de demostración (dejar solo las tiendas reales)
 
 Una instalación trae tiendas y empleados **de ejemplo** (R01 y R02), y el script `seed:dummy` agrega más (R03 a R05, unos 100 empleados y miles de marcaciones falsas). Para dejar solo lo real, la app incluye una limpieza que **borra todas las tiendas que no indique**, con sus empleados, marcaciones, cronogramas y demás datos dependientes.

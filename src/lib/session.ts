@@ -12,7 +12,9 @@ export type Role =
   | "site_manager"
   | "operator"
   | "auditor"
-  | "hr";
+  | "hr"
+  /** Solo activa la tablet de su tienda en /kiosco: nunca recibe sesión de usuario. */
+  | "kiosk";
 
 export type SessionUser = {
   id: string;
@@ -126,6 +128,7 @@ export function newTotpSecret() {
 }
 
 export const ROLE_RANK: Record<Role, number> = {
+  kiosk: 0,
   auditor: 1,
   operator: 2,
   hr: 2,

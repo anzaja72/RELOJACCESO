@@ -123,7 +123,7 @@ async function main() {
   db.pragma("busy_timeout = 5000");
   const users = db.prepare("SELECT id, email, name, role, scope_type, scope_id FROM users ORDER BY email").all();
   const pilotEmails = new Set(PILOTO.map((p) => p.email));
-  const borrar = users.filter((u) => u.email !== ADMIN && (SEMILLA.has(u.id) || (u.email.endsWith("@reloj.cr") && !pilotEmails.has(u.email))));
+  const borrar = users.filter((u) => u.email !== ADMIN && u.role !== "kiosk" && (SEMILLA.has(u.id) || (u.email.endsWith("@reloj.cr") && !pilotEmails.has(u.email))));
   const quedan = users.filter((u) => !borrar.includes(u));
   const crear = PILOTO.filter((p) => !quedan.some((u) => u.email === p.email));
 

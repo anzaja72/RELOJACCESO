@@ -212,6 +212,11 @@ export const api = {
       token,
       body: JSON.stringify(body),
     }),
+  kioskActivate: (body: { tienda: string; password: string }) =>
+    request<{ token: string; terminalId: string; site: Site }>("/api/v1/kiosk/activate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
   reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
   dashboard: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports/dashboard?${qs}`, { admin: true }),

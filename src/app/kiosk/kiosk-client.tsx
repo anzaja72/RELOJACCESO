@@ -11,8 +11,9 @@ import { api } from "@/lib/api-client";
 import { detectFace, livenessHint, loadFaceModels } from "@/lib/face";
 import { identifyFace, type GalleryEntry } from "@/lib/match";
 import { cacheGallery, enqueuePunch, flushQueue, listQueued, readGallery } from "@/lib/offline";
-import { getTerminal, getTerminalId, type TerminalBinding } from "@/lib/terminal";
+import { getTerminal, getTerminalId, isStoreKiosk, type TerminalBinding } from "@/lib/terminal";
 import { KioskActivation } from "./kiosk-activation";
+import { KioskLogin } from "./kiosk-login";
 import type { PunchType, Site, SyncItem } from "@/lib/types";
 import { LOCALE, TIMEZONE } from "@/lib/config";
 
@@ -47,6 +48,43 @@ type ResultState = {
   detail: string;
 };
 
+/** En /kiosco (standalone) no hay menú ni enlaces: solo la captura de la tienda. */
+function KioskFrame({
+  standalone,
+  title,
+  meta,
+  actions,
+  children,
+}: {
+  standalone: boolean;
+  title: string;
+  meta?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (!standalone) {
+    return (
+      <AppShell title={title} meta={meta} actions={actions}>
+        {children}
+      </AppShell>
+    );
+  }
+  return (
+    <div className="kiosk-standalone">
+      <section className="canvas">
+        <header className="canvas-bar">
+          <div>
+            <h1>{title}</h1>
+            {meta ? <p>{meta}</p> : null}
+          </div>
+          <div className="canvas-actions">{actions}</div>
+        </header>
+        <div className="canvas-body">{children}</div>
+      </section>
+    </div>
+  );
+}
+
 export function KioskClient() {
   const search = useSearchParams();
   const querySite = search.get("site");
@@ -72,9 +110,11 @@ export function KioskClient() {
   const [showPin, setShowPin] = useState(false);
   const [binding, setBinding] = useState<TerminalBinding | null>(null);
   const [bindingChecked, setBindingChecked] = useState(false);
+  const [standalone, setStandalone] = useState(false);
 
   useEffect(() => {
     setBinding(getTerminal());
+    setStandalone(isStoreKiosk());
     setBindingChecked(true);
   }, []);
 
@@ -424,13 +464,17 @@ export function KioskClient() {
 
   // Sin terminal activada no se monta la cámara ni se descarga la galería.
   if (!binding) {
-    return bindingChecked ? (
+    if (!bindingChecked) return null;
+    return standalone ? (
+      <KioskLogin onActivated={setBinding} />
+    ) : (
       <KioskActivation initialSite={querySite} onActivated={setBinding} />
-    ) : null;
+    );
   }
 
   return (
-    <AppShell
+    <KioskFrame
+      standalone={standalone}
       title={site ? site.name : loadError ? "Sin sede" : "Cargando sede…"}
       meta={`${clock} · ${enrolledCount} plantillas${loadError ? ` · ${loadError}` : ""}`}
       actions={
@@ -584,6 +628,6 @@ export function KioskClient() {
           <p>{result.detail}</p>
         </div>
       )}
-    </AppShell>
+    </KioskFrame>
   );
 }

@@ -536,6 +536,9 @@ async function handlePost(request: Request, parts: string[]) {
       if (!user || !user.active || !verifyPassword(body.password, user.password_hash)) {
         return json({ error: "Credenciales inválidas", code: "INVALID_CREDENTIALS" }, 401, request);
       }
+      if (user.role === "kiosk") {
+        return json({ error: "Este usuario es solo de kiosco: ábralo en /kiosco", code: "KIOSK_ONLY" }, 403, request);
+      }
       if (user.totp_enabled && user.totp_secret) {
         if (!body.totp) {
           return json({ error: "Se requiere TOTP", code: "TOTP_REQUIRED" }, 401, request);

@@ -8,6 +8,7 @@ export const ROLE_LABEL: Record<SessionUser["role"], string> = {
   operator: "Operador",
   auditor: "Auditor",
   hr: "Recursos Humanos",
+  kiosk: "Kiosco",
 };
 
 export type ZoneRow = { id: string; name: string; country_id: string };

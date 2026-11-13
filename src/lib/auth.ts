@@ -48,7 +48,8 @@ export function readActor(request: Request): Actor | null {
   const apiKey = integrationApiKey();
   if (apiKey && sameSecret(key, apiKey)) return API_ACTOR;
   const session = verifyToken(key);
-  if (!session) return null;
+  // Un usuario de kiosco nunca tiene sesión: si apareciera una, no vale para nada.
+  if (!session || session.role === "kiosk") return null;
   return { ...session, via: "jwt" };
 }
 

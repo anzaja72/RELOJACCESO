@@ -1,6 +1,7 @@
 // Crea un usuario real (p. ej. RR. HH. o un gerente) sin exponer la contraseña en la línea de comandos.
 // Uso: NEW_USER_PASSWORD='...' node scripts/create-user.mjs --email x@y.co --name "Nombre" \
-//        --role hr|zone_manager|site_manager|operator|auditor|superadmin [--scope-type all|zone|site --scope-id zone_caribe]
+//        --role hr|zone_manager|site_manager|operator|auditor|superadmin|kiosk [--scope-type all|zone|site --scope-id zone_caribe]
+// kiosk: usuario de la tablet de UNA tienda (--scope-id site_ap). Solo activa el kiosco en /kiosco; no puede entrar a la app.
 import Database from "better-sqlite3";
 import { randomBytes, scryptSync } from "node:crypto";
 import path from "node:path";
@@ -19,7 +20,7 @@ const email = arg("email")?.trim().toLowerCase();
 const name = arg("name")?.trim();
 const role = arg("role");
 const password = process.env.NEW_USER_PASSWORD;
-const ROLES = ["hr", "zone_manager", "site_manager", "operator", "auditor", "superadmin"];
+const ROLES = ["hr", "zone_manager", "site_manager", "operator", "auditor", "superadmin", "kiosk"];
 if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail("--email inválido");
 if (!name) fail("--name es obligatorio");
 if (!ROLES.includes(role)) fail(`--role debe ser uno de: ${ROLES.join(", ")}`);
@@ -29,6 +30,7 @@ const scopeType = arg("scope-type") ?? (["hr", "auditor", "superadmin"].includes
 const scopeId = scopeType === "all" ? null : arg("scope-id");
 if (!["all", "zone", "site"].includes(scopeType)) fail("--scope-type debe ser all, zone o site");
 if (scopeType !== "all" && !scopeId) fail("--scope-id es obligatorio con alcance zone o site");
+if (role === "kiosk" && scopeType !== "site") fail("El usuario kiosk es de una sola tienda: use --scope-type site --scope-id <id de la tienda>");
 
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const db = new Database(path.join(dataDir, process.env.SANDBOX === "true" ? "asistencia.sandbox.db" : "asistencia.db"));
