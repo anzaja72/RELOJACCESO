@@ -1,0 +1,14 @@
+[
+ { "semana": "2026-11-16", "empleados": [
+   { "empleado_id": "e1", "empleado": "LAURA PEREZ", "tienda": "Alto Prado", "programadas_h": "42:00", "dias": [
+     { "fecha": "2026-11-16", "turno": "08:00-16:00", "almuerzo_programado_min": 30, "entrada": "08:25", "llegada_tarde_min": 25, "almuerzo_tomado_min": 50, "almuerzo_excedido_min": 20 },
+     { "fecha": "2026-11-17", "turno": "08:00-16:00", "almuerzo_programado_min": 30, "entrada": "08:15", "llegada_tarde_min": 15 },
+     { "fecha": "2026-11-18", "turno": "08:00-16:00", "almuerzo_programado_min": 30, "entrada": "07:58" },
+     { "fecha": "2026-11-19", "turno": "08:00-16:00", "almuerzo_programado_min": 30, "entrada": "08:40", "llegada_tarde_min": 40 },
+     { "fecha": "2026-11-20", "programado": "descanso" } ] },
+   { "empleado_id": "e2", "empleado": "CAMILO RUIZ", "tienda": "Alto Prado", "programadas_h": "42:00", "dias": [
+     { "fecha": "2026-11-16", "turno": "17:30-02:00", "almuerzo_programado_min": 30, "entrada": "17:29", "almuerzo_tomado_min": 45, "almuerzo_excedido_min": 15 },
+     { "fecha": "2026-11-17", "turno": "17:30-02:00", "almuerzo_programado_min": 30, "entrada": "17:35" } ] },
+   { "empleado_id": "e3", "empleado": "SOFIA MORA", "tienda": "Buenavista", "programadas_h": "sin cronograma aprobado", "dias": [ { "fecha": "2026-11-16", "entrada": "09:10" } ] }
+ ] }
+]

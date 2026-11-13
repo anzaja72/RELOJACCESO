@@ -1,0 +1,9 @@
+{
+  "periodo": { "desde": "2026-11-16", "hasta": "2026-11-30" },
+  "categorias": { "ord_dia": "Horas ordinarias diurnas", "ord_noche": "Recargo nocturno (horas ordinarias)", "ord_dom_dia": "Recargo dominical o festivo (horas ordinarias)", "ord_dom_noche": "Recargo nocturno dominical o festivo", "ext_dia": "Hora extra diurna", "ext_noche": "Hora extra nocturna", "ext_dom_dia": "Hora extra diurna dominical o festiva", "ext_dom_noche": "Hora extra nocturna dominical o festiva" },
+  "empleados": [
+    { "empleado_id": "e1", "codigo": "TE-01", "empleado": "LAURA PEREZ", "cedula": "10000001", "tienda": "Tienda Ejemplo", "tipo_jornada": "Gerente", "horas_trabajadas": 84.5, "horas": { "ord_dia": 60, "ord_noche": 14, "ord_dom_dia": 8.5, "ext_dia": 2 }, "tardanzas": { "dias": 2, "minutos": 35 }, "horas_adicionales": [ { "semana": "2026-11-16", "exceso": "2:00", "estado": "pendiente" } ] },
+    { "empleado_id": "e2", "codigo": "TE-02", "empleado": "CAMILO RUIZ", "cedula": "10000002", "tienda": "Tienda Ejemplo", "tipo_jornada": "Tiempo completo", "horas_trabajadas": 76, "horas": { "ord_dia": 40, "ord_noche": 30, "ord_dom_noche": 6 }, "almuerzo_excedido": { "dias": 1, "minutos": 20 }, "ausencias_por_revisar": ["2026-11-25"], "trabajo_sin_turno_aprobado": ["2026-11-30"] },
+    { "empleado_id": "e3", "codigo": "TE-03", "empleado": "ANA GOMEZ", "cedula": "10000003", "tienda": "Tienda Ejemplo", "tipo_jornada": "Coordinador", "horas_trabajadas": 0, "horas": {}, "novedades_dias": { "vacaciones": 15 } }
+  ]
+}

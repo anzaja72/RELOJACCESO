@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Puntualidad y almuerzos</title>
+<style>
+  :root { --ink: #1f1f1f; --muted: #666; --line: #d0d0d0; --head: #c27ba0; --bad: #c62828; --warn: #b26a00; --ok: #2e7d32; --badbg: #fde2e2; --warnbg: #fff4e0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; color: var(--ink); background: #fff; font: 13px/1.4 Calibri, "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 18px; margin: 0; } h2 { font-size: 15px; margin: 18px 0 6px; }
+  .sub { color: var(--muted); margin: 2px 0 12px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+  .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-width: 150px; }
+  .kpi b { display: block; font-size: 20px; }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+  th { background: var(--head); color: #fff; font-weight: 600; }
+  td.n { text-align: right; }
+  tr.rein td { background: var(--badbg); }
+  tr.obs td { background: var(--warnbg); }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+  .tag.bad { background: var(--badbg); color: var(--bad); } .tag.warn { background: var(--warnbg); color: var(--warn); }
+  details { margin: 2px 0; } summary { cursor: pointer; color: var(--muted); }
+  .nota { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  @media print { details { display: none; } @page { size: landscape; margin: 10mm; } }
+</style>
+</head>
+<body>
+<div id="app">Cargando…</div>
+<script>
+/* Pegue aquí, sin cambiarlas, una o varias respuestas de horas_semanales con detalle_por_dia: true. Ej.: [ {…semana 1…}, {…semana 2…} ]. */
+const DATOS = /*DATOS*/ null /*FIN_DATOS*/;
+
+// ===LOGICA===
+const REINCIDENCIA_DIAS = 3; // tardanzas en el período para marcar reincidencia
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (x) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[x]);
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const diaTxt = (iso) => `${DIAS[new Date(`${iso}T12:00:00Z`).getUTCDay()]} ${iso.slice(8)}/${iso.slice(5, 7)}`;
+
+/** semanas = respuestas de horas_semanales. Devuelve personas con tardanzas/almuerzos, tiendas y totales. */
+function analizarPuntualidad(semanas) {
+  const lista = Array.isArray(semanas) ? semanas : [semanas];
+  const personas = new Map();
+  let desde = null, hasta = null;
+  for (const s of lista) for (const e of s.empleados || []) {
+    const p = personas.get(e.empleado_id) ?? { id: e.empleado_id, nombre: e.empleado, tienda: e.tienda, tarde: [], almuerzo: [], diasConTurno: 0 };
+    for (const d of e.dias || []) {
+      if (!desde || d.fecha < desde) desde = d.fecha;
+      if (!hasta || d.fecha > hasta) hasta = d.fecha;
+      if (d.turno) p.diasConTurno += 1;
+      if (d.llegada_tarde_min) p.tarde.push({ fecha: d.fecha, min: d.llegada_tarde_min, turno: d.turno, entrada: d.entrada });
+      if (d.almuerzo_excedido_min) p.almuerzo.push({ fecha: d.fecha, min: d.almuerzo_excedido_min, tomado: d.almuerzo_tomado_min, programado: d.almuerzo_programado_min });
+    }
+    personas.set(e.empleado_id, p);
+  }
+  const filas = [...personas.values()].map((p) => ({
+    ...p,
+    minTarde: p.tarde.reduce((s, x) => s + x.min, 0),
+    minAlmuerzo: p.almuerzo.reduce((s, x) => s + x.min, 0),
+    reincidente: p.tarde.length >= REINCIDENCIA_DIAS,
+    puntualidad: p.diasConTurno ? Math.round((1 - p.tarde.length / p.diasConTurno) * 100) : null,
+  })).filter((p) => p.tarde.length || p.almuerzo.length)
+    .sort((a, b) => b.tarde.length - a.tarde.length || b.minTarde - a.minTarde || b.minAlmuerzo - a.minAlmuerzo);
+  const tiendas = new Map();
+  for (const p of personas.values()) {
+    const t = tiendas.get(p.tienda) ?? { tienda: p.tienda, diasConTurno: 0, tardanzas: 0, minTarde: 0, almuerzos: 0 };
+    t.diasConTurno += p.diasConTurno; t.tardanzas += p.tarde.length; t.minTarde += p.tarde.reduce((s, x) => s + x.min, 0); t.almuerzos += p.almuerzo.length;
+    tiendas.set(p.tienda, t);
+  }
+  const resumenTiendas = [...tiendas.values()].map((t) => ({ ...t, puntualidad: t.diasConTurno ? Math.round((1 - t.tardanzas / t.diasConTurno) * 100) : null })).sort((a, b) => (a.puntualidad ?? 101) - (b.puntualidad ?? 101));
+  return {
+    desde, hasta, filas, resumenTiendas,
+    totales: { personas: personas.size, conTardanza: filas.filter((f) => f.tarde.length).length, reincidentes: filas.filter((f) => f.reincidente).length, tardanzas: filas.reduce((s, f) => s + f.tarde.length, 0), minTarde: filas.reduce((s, f) => s + f.minTarde, 0), almuerzos: filas.reduce((s, f) => s + f.almuerzo.length, 0) },
+    sinCronograma: lista.flatMap((s) => s.empleados || []).filter((e) => e.programadas_h === "sin cronograma aprobado").map((e) => e.empleado),
+  };
+}
+// ===FIN LOGICA===
+
+function render(datos) {
+  const app = document.getElementById("app");
+  if (!datos) { app.textContent = "Sin datos: pegue en DATOS las respuestas de horas_semanales con detalle_por_dia."; return; }
+  const a = analizarPuntualidad(datos);
+  const t = a.totales;
+  let html = `<h1>Puntualidad y almuerzos</h1><div class="sub">Del ${a.desde ?? "—"} al ${a.hasta ?? "—"} · contra el cronograma aprobado · 10 min de gracia en la entrada</div>`;
+  html += `<div class="kpis"><div class="kpi"><b>${t.tardanzas}</b>llegadas tarde (${t.minTarde} min)</div><div class="kpi"><b>${t.conTardanza}</b>personas con tardanza de ${t.personas}</div><div class="kpi"><b>${t.reincidentes}</b>reincidentes (${REINCIDENCIA_DIAS}+ en el período)</div><div class="kpi"><b>${t.almuerzos}</b>almuerzos excedidos</div></div>`;
+  html += `<h2>Por tienda</h2><div class="wrap"><table><thead><tr><th>Tienda</th><th>Días con turno</th><th>Tardanzas</th><th>Minutos tarde</th><th>Almuerzos excedidos</th><th>Puntualidad</th></tr></thead><tbody>`;
+  html += a.resumenTiendas.map((r) => `<tr><td>${esc(r.tienda)}</td><td class="n">${r.diasConTurno}</td><td class="n">${r.tardanzas}</td><td class="n">${r.minTarde}</td><td class="n">${r.almuerzos}</td><td class="n">${r.puntualidad == null ? "—" : `${r.puntualidad} %`}</td></tr>`).join("");
+  html += `</tbody></table></div><h2>Por persona</h2>`;
+  if (!a.filas.length) html += `<p>Nadie llegó tarde ni se pasó del almuerzo en el período.</p>`;
+  else {
+    html += `<div class="wrap"><table><thead><tr><th>Persona</th><th>Tienda</th><th>Tardanzas</th><th>Min tarde</th><th>Almuerzos excedidos</th><th>Min almuerzo</th><th>Detalle</th></tr></thead><tbody>`;
+    for (const f of a.filas) {
+      const det = [...f.tarde.map((x) => `${diaTxt(x.fecha)}: llegó ${esc(x.entrada)} (turno ${esc(x.turno)}), ${x.min} min tarde`), ...f.almuerzo.map((x) => `${diaTxt(x.fecha)}: almuerzo de ${x.tomado} min (programado ${x.programado ?? "—"}), +${x.min} min`)];
+      html += `<tr class="${f.reincidente ? "rein" : f.tarde.length ? "obs" : ""}"><td>${esc(f.nombre)} ${f.reincidente ? `<span class="tag bad">reincidente</span>` : ""}</td><td>${esc(f.tienda)}</td><td class="n">${f.tarde.length}</td><td class="n">${f.minTarde}</td><td class="n">${f.almuerzo.length}</td><td class="n">${f.minAlmuerzo}</td><td><details><summary>${det.length} evento(s)</summary>${det.map((d) => `<div>${d}</div>`).join("")}</details></td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+  if (a.sinCronograma.length) html += `<p class="nota">Sin cronograma aprobado (no se mide su puntualidad): ${esc([...new Set(a.sinCronograma)].join(", "))}.</p>`;
+  html += `<p class="nota">Es un reporte para revisar, no una sanción. Antes de cualquier medida disciplinaria se debe escuchar a la persona (debido proceso, art. 115 CST).</p>`;
+  app.innerHTML = html;
+}
+if (typeof document !== "undefined") render(DATOS);
+</script>
+</body>
+</html>

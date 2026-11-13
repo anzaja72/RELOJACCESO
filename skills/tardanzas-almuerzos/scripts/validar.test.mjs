@@ -1,0 +1,20 @@
+// Prueba la lógica de assets/puntualidad.html: node scripts/validar.test.mjs
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const html = readFileSync(new URL("../assets/puntualidad.html", import.meta.url), "utf8");
+const logica = html.split("// ===LOGICA===")[1].split("\n").slice(1).join("\n").split("// ===FIN LOGICA===")[0];
+const { analizarPuntualidad } = new Function(`${logica}; return { analizarPuntualidad };`)();
+const a = analizarPuntualidad(JSON.parse(readFileSync(new URL("./ejemplo-horas_semanales.json", import.meta.url), "utf8")));
+const laura = a.filas.find((f) => f.nombre === "LAURA PEREZ");
+assert.equal(laura.tarde.length, 3);
+assert.equal(laura.minTarde, 80);
+assert.equal(laura.reincidente, true, "3 tardanzas en el período");
+assert.equal(laura.puntualidad, 25, "1 de 4 días con turno a tiempo");
+const camilo = a.filas.find((f) => f.nombre === "CAMILO RUIZ");
+assert.equal(camilo.tarde.length, 0, "5 min tarde está dentro de la gracia (Reloj no lo reporta)");
+assert.equal(camilo.minAlmuerzo, 15);
+assert.equal(a.filas[0].nombre, "LAURA PEREZ", "primero quien más tardanzas tiene");
+assert.deepEqual(a.sinCronograma, ["SOFIA MORA"]);
+assert.equal(a.resumenTiendas.find((t) => t.tienda === "Alto Prado").puntualidad, 50, "3 tardanzas en 6 días con turno");
+assert.deepEqual([a.desde, a.hasta], ["2026-11-16", "2026-11-20"]);
+console.log(`ok · ${a.totales.tardanzas} tardanzas, ${a.totales.reincidentes} reincidente(s)`);

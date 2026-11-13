@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control de jornada</title>
+<style>
+  :root { --ink: #1f1f1f; --muted: #666; --line: #d0d0d0; --head: #c27ba0; --bad: #c62828; --warn: #b26a00; --ok: #2e7d32; --badbg: #fde2e2; --warnbg: #fff4e0; --okbg: #e6f4ea; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; color: var(--ink); background: #fff; font: 13px/1.4 Calibri, "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 18px; margin: 0; } h2 { font-size: 15px; margin: 16px 0 6px; }
+  .sub { color: var(--muted); margin: 2px 0 12px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 10px; }
+  .kpi { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-width: 160px; }
+  .kpi b { display: block; font-size: 20px; } .kpi.bad b { color: var(--bad); } .kpi.ok b { color: var(--ok); }
+  .wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 820px; }
+  th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: var(--head); color: #fff; font-weight: 600; }
+  td.n { text-align: right; white-space: nowrap; }
+  .tag { display: inline-block; margin: 1px 2px; padding: 1px 6px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+  .tag.bad { background: var(--badbg); color: var(--bad); } .tag.warn { background: var(--warnbg); color: var(--warn); }
+  .nota { color: var(--muted); font-size: 12px; margin-top: 12px; }
+  @media print { @page { size: landscape; margin: 10mm; } }
+</style>
+</head>
+<body>
+<div id="app">Cargando…</div>
+<script>
+/* Pegue aquí, sin cambiarlas, las respuestas de horas_semanales con detalle_por_dia: true de cada semana del período: [ {…}, {…} ]. */
+const DATOS = /*DATOS*/ null /*FIN_DATOS*/;
+
+// ===LOGICA===
+const MAX_SEMANA_MIN = 42 * 60;   // Ley 2101 de 2021: 42 h semanales desde el 15 de julio de 2026
+const MAX_EXTRA_SEMANA_MIN = 12 * 60; // CST art. 22: máximo 12 h extra a la semana
+const MAX_DIA_MIN = 9 * 60;       // jornada flexible: hasta 9 h diarias sin recargo
+const DOMINGOS_HABITUAL = 3;      // 3 o más domingos/festivos en el mes: trabajo dominical habitual
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (x) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[x]);
+const aMin = (t) => { if (t == null || t === "") return null; const neg = String(t).startsWith("-"); const [h, m] = String(t).replace("-", "").split(":").map(Number); return (neg ? -1 : 1) * (h * 60 + (m || 0)); };
+const hTxt = (min) => { const h = Math.floor(Math.abs(min) / 60), m = Math.abs(min) % 60; return `${min < 0 ? "-" : ""}${h}:${String(m).padStart(2, "0")}`; };
+const esDomingo = (iso) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 0;
+
+/** semanas = respuestas de horas_semanales (detalle_por_dia). festivos = fechas AAAA-MM-DD opcionales. */
+function analizarJornada(semanas, festivos = []) {
+  const lista = Array.isArray(semanas) ? semanas : [semanas];
+  const fest = new Set(festivos);
+  const personas = new Map();
+  const hallazgos = [];
+  for (const s of lista) for (const e of s.empleados || []) {
+    const p = personas.get(e.empleado_id) ?? { id: e.empleado_id, nombre: e.empleado, tienda: e.tienda, semanas: [], domingos: [] };
+    const trabajadas = aMin(e.trabajadas_netas_h) ?? 0;
+    const ref = typeof e.referencia_h === "string" && !/m[ií]nimo/.test(e.referencia_h) ? aMin(e.referencia_h) : null;
+    const limite = Math.min(ref ?? MAX_SEMANA_MIN, MAX_SEMANA_MIN);
+    const exceso = Math.max(0, trabajadas - limite);
+    const dias = e.dias || [];
+    const trabajados = dias.filter((d) => aMin(d.neto) > 0);
+    const largos = trabajados.filter((d) => aMin(d.neto) > MAX_DIA_MIN);
+    for (const d of trabajados) if (esDomingo(d.fecha) || fest.has(d.fecha)) p.domingos.push(d.fecha);
+    const semana = { inicio: s.semana, trabajadas, limite, exceso, estado: e.exceso_estado, largos: largos.map((d) => `${d.fecha} (${d.neto})`), sinDescanso: trabajados.length >= 7, bajoMinimo: aMin(e.bajo_minimo_h) ?? 0 };
+    p.semanas.push(semana);
+    const quien = `${e.empleado} (${e.tienda}), semana del ${s.semana}`;
+    if (exceso > 0) hallazgos.push({ nivel: e.exceso_estado === "aprobada" ? "warn" : "bad", tipo: "Más de la jornada", texto: `${quien}: ${hTxt(trabajadas)} h, ${hTxt(exceso)} sobre el máximo de ${hTxt(limite)} h${e.exceso_estado === "aprobada" ? " (aprobadas por el regional)" : ` — ${e.exceso_estado ? `autorización ${e.exceso_estado}` : "sin enviar a autorización"}`}.` });
+    if (exceso > MAX_EXTRA_SEMANA_MIN) hallazgos.push({ nivel: "bad", tipo: "Tope de extras", texto: `${quien}: ${hTxt(exceso)} h extra; el máximo legal es 12 h a la semana.` });
+    if (semana.sinDescanso) hallazgos.push({ nivel: "bad", tipo: "Sin descanso semanal", texto: `${quien}: trabajó los 7 días.` });
+    if (largos.length) hallazgos.push({ nivel: "warn", tipo: "Días de más de 9 h", texto: `${quien}: ${semana.largos.join(", ")}.` });
+    if (semana.bajoMinimo > 0) hallazgos.push({ nivel: "warn", tipo: "Bajo el mínimo", texto: `${quien}: ${hTxt(semana.bajoMinimo)} h por debajo del mínimo de su jornada.` });
+    personas.set(e.empleado_id, p);
+  }
+  for (const p of personas.values()) {
+    const porMes = new Map();
+    for (const d of p.domingos) porMes.set(d.slice(0, 7), [...(porMes.get(d.slice(0, 7)) || []), d]);
+    for (const [mes, ds] of porMes) if (ds.length >= DOMINGOS_HABITUAL) hallazgos.push({ nivel: "warn", tipo: "Dominical habitual", texto: `${p.nombre} (${p.tienda}): trabajó ${ds.length} domingos o festivos en ${mes}; revise su descanso compensatorio.` });
+  }
+  const orden = { bad: 0, warn: 1 };
+  hallazgos.sort((a, b) => orden[a.nivel] - orden[b.nivel] || a.tipo.localeCompare(b.tipo));
+  return { semanas: lista.map((s) => s.semana), personas: [...personas.values()], hallazgos, graves: hallazgos.filter((h) => h.nivel === "bad").length };
+}
+// ===FIN LOGICA===
+
+function render(datos) {
+  const app = document.getElementById("app");
+  if (!datos) { app.textContent = "Sin datos: pegue en DATOS las respuestas de horas_semanales con detalle_por_dia."; return; }
+  const a = analizarJornada(datos, typeof FESTIVOS !== "undefined" ? FESTIVOS : []);
+  const cuenta = (tipo) => a.hallazgos.filter((h) => h.tipo === tipo).length;
+  let html = `<h1>Control de jornada</h1><div class="sub">Semanas: ${a.semanas.map(esc).join(", ")} · máximo 42 h semanales (Ley 2101), 12 h extra por semana, al menos un día de descanso</div>`;
+  html += `<div class="kpis"><div class="kpi ${a.graves ? "bad" : "ok"}"><b>${a.graves}</b>hallazgos graves</div><div class="kpi"><b>${cuenta("Más de la jornada")}</b>semanas sobre la jornada</div><div class="kpi"><b>${cuenta("Sin descanso semanal")}</b>semanas sin descanso</div><div class="kpi"><b>${cuenta("Días de más de 9 h")}</b>semanas con días de más de 9 h</div><div class="kpi"><b>${cuenta("Dominical habitual")}</b>dominical habitual</div></div>`;
+  html += `<h2>Hallazgos</h2>`;
+  html += a.hallazgos.length ? `<div class="wrap"><table><thead><tr><th>Nivel</th><th>Tipo</th><th>Detalle</th></tr></thead><tbody>${a.hallazgos.map((h) => `<tr><td><span class="tag ${h.nivel}">${h.nivel === "bad" ? "Corregir" : "Revisar"}</span></td><td>${esc(h.tipo)}</td><td>${esc(h.texto)}</td></tr>`).join("")}</tbody></table></div>` : `<p>Sin hallazgos: todas las semanas dentro de la jornada, con descanso y sin días de más de 9 h.</p>`;
+  html += `<h2>Horas por persona y semana</h2><div class="wrap"><table><thead><tr><th>Persona</th><th>Tienda</th>${a.semanas.map((s) => `<th>${esc(s)}</th>`).join("")}</tr></thead><tbody>`;
+  for (const p of a.personas.sort((x, y) => x.tienda.localeCompare(y.tienda) || x.nombre.localeCompare(y.nombre))) {
+    html += `<tr><td>${esc(p.nombre)}</td><td>${esc(p.tienda)}</td>${a.semanas.map((s) => { const w = p.semanas.find((x) => x.inicio === s); if (!w) return "<td></td>"; return `<td class="n">${hTxt(w.trabajadas)}${w.exceso ? ` <span class="tag ${w.estado === "aprobada" ? "warn" : "bad"}">+${hTxt(w.exceso)}</span>` : ""}${w.sinDescanso ? ` <span class="tag bad">sin descanso</span>` : ""}</td>`; }).join("")}</tr>`;
+  }
+  html += `</tbody></table></div><p class="nota">Horas netas trabajadas (sin almuerzo), según las marcaciones. Las horas adicionales no se pagan ni compensan hasta que el gerente regional las apruebe en Reloj.</p>`;
+  app.innerHTML = html;
+}
+if (typeof document !== "undefined") render(DATOS);
+</script>
+</body>
+</html>

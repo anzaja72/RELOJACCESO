@@ -1,0 +1,12 @@
+[
+ { "semana": "2026-11-09", "empleados": [
+   { "empleado_id": "e1", "empleado": "LAURA PEREZ", "tienda": "Alto Prado", "referencia_h": "42:00", "trabajadas_netas_h": "47:30", "exceso_h": "5:30", "exceso_estado": "pendiente", "descansos": 1, "dias": [
+     { "fecha": "2026-11-09", "neto": "9:30" }, { "fecha": "2026-11-10", "neto": "8:00" }, { "fecha": "2026-11-11", "neto": "8:00" }, { "fecha": "2026-11-12", "neto": "8:00" }, { "fecha": "2026-11-13", "neto": "7:00" }, { "fecha": "2026-11-14", "neto": null }, { "fecha": "2026-11-15", "neto": "7:00" } ] },
+   { "empleado_id": "e2", "empleado": "CAMILO RUIZ", "tienda": "Alto Prado", "referencia_h": "42:00", "trabajadas_netas_h": "56:00", "exceso_h": "14:00", "exceso_estado": null, "descansos": 0, "dias": [
+     { "fecha": "2026-11-09", "neto": "8:00" }, { "fecha": "2026-11-10", "neto": "8:00" }, { "fecha": "2026-11-11", "neto": "8:00" }, { "fecha": "2026-11-12", "neto": "8:00" }, { "fecha": "2026-11-13", "neto": "8:00" }, { "fecha": "2026-11-14", "neto": "8:00" }, { "fecha": "2026-11-15", "neto": "8:00" } ] } ] },
+ { "semana": "2026-11-16", "empleados": [
+   { "empleado_id": "e1", "empleado": "LAURA PEREZ", "tienda": "Alto Prado", "referencia_h": "42:00", "trabajadas_netas_h": "42:00", "descansos": 1, "dias": [ { "fecha": "2026-11-22", "neto": "7:00" }, { "fecha": "2026-11-17", "neto": "7:00" } ] },
+   { "empleado_id": "e2", "empleado": "CAMILO RUIZ", "tienda": "Alto Prado", "referencia_h": "42:00", "trabajadas_netas_h": "41:00", "descansos": 1, "dias": [ { "fecha": "2026-11-22", "neto": "7:00" } ] } ] },
+ { "semana": "2026-11-23", "empleados": [
+   { "empleado_id": "e1", "empleado": "LAURA PEREZ", "tienda": "Alto Prado", "referencia_h": "42:00", "trabajadas_netas_h": "42:00", "descansos": 1, "dias": [ { "fecha": "2026-11-29", "neto": "6:00" } ] } ] }
+]
