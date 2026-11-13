@@ -20,6 +20,14 @@ function devOrigins() {
 const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
   allowedDevOrigins: devOrigins(),
+  async redirects() {
+    // El enlace de las tablets es /kiosco; quien lo escriba con k o con mayúscula también llega.
+    return ["/kiosko", "/Kiosko", "/KIOSKO", "/Kiosco", "/KIOSCO"].map((source) => ({
+      source,
+      destination: "/kiosco",
+      permanent: false,
+    }));
+  },
   async headers() {
     // El navegador debe revisar sw.js en cada carga para que las actualizaciones lleguen.
     return [
