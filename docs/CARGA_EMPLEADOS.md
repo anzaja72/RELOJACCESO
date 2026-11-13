@@ -39,7 +39,7 @@ Crear el usuario (en el VPS; imprime la contraseña una vez):
 PW=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-12); docker exec -e NEW_USER_PASSWORD="$PW" reloj-cr node scripts/create-user.mjs --email kiosco.ap@reloj.cr --name "Kiosco Alto Prado" --role kiosk --scope-type site --scope-id site_ap && echo "Contraseña kiosco AP: $PW"
 ```
 
-En la tablet: abrir `https://<dominio>/kiosco`, escribir la tienda (`AP` o `Alto Prado`) y la contraseña. Queda en modo tienda: solo la captura, sin menú, y funciona sin internet. Cualquier otra pantalla pide iniciar sesión. Para quitar una tablet, revóquela en Operación › Terminales.
+En la tablet: abrir `https://<dominio>/kiosco`, escribir la tienda (`AP` o `Alto Prado`) y la contraseña. Queda en modo tienda: solo la captura, sin menú, y funciona sin internet. Cualquier otra pantalla pide iniciar sesión. Para quitar una tablet, revóquela en Estructura (lista de tablets de la sede › Revocar).
 
 La captura reconoce solo a quien esté **enrolado** (rostro registrado en Enrolar por el gerente o coordinador).
 
