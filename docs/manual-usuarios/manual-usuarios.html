@@ -1,0 +1,1101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de usuarios Reloj</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bone: #F5EBDC;
+  --paper: #FFF9F0;
+  --cocoa: #502314;
+  --cocoa-2: #6E3B26;
+  --cocoa-3: #8A5A44;
+  --scarlet: #D62300;
+  --scarlet-soft: #FBE3D9;
+  --olive: #424B08;
+  --olive-soft: #E7EAD2;
+  --amber-soft: #FBEFD0;
+  --line: rgba(80, 35, 20, 0.16);
+  --line-soft: rgba(80, 35, 20, 0.08);
+  --display: "Caprasimo", "Cooper Black", Georgia, serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+body {
+  margin: 0;
+  background: var(--bone);
+  color: var(--cocoa);
+  font: 16px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--scarlet); text-underline-offset: 3px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1.12; margin: 0; letter-spacing: 0.005em; }
+h4 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin: 28px 0 10px; color: var(--cocoa-2); }
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 14px; padding-left: 22px; }
+li { margin: 4px 0; }
+li::marker { color: var(--scarlet); font-weight: 700; }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; background: var(--paper); border: 1px solid var(--line-soft); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.ui { font-weight: 700; color: var(--cocoa); background: #fff; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 7px; padding: 0 7px; font-size: 0.9em; white-space: nowrap; }
+
+/* ---------- barra superior ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--cocoa); color: var(--bone);
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 24px;
+}
+.topbar strong { font-family: var(--display); font-weight: 400; font-size: 20px; white-space: nowrap; }
+.topbar nav { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+.topbar nav::-webkit-scrollbar { display: none; }
+.topbar nav a {
+  color: var(--bone); text-decoration: none; font-size: 13px; font-weight: 600;
+  padding: 6px 12px; border-radius: 999px; white-space: nowrap; border: 1px solid rgba(245,235,220,0.25);
+}
+.topbar nav a:hover { background: var(--scarlet); border-color: var(--scarlet); }
+
+/* ---------- portada ---------- */
+.cover {
+  background: var(--scarlet); color: var(--bone);
+  padding: 72px 24px 64px; position: relative; overflow: hidden;
+}
+.cover::after {
+  content: ""; position: absolute; right: -120px; bottom: -160px; width: 420px; height: 420px;
+  border-radius: 50%; background: rgba(245,235,220,0.10);
+}
+.cover-inner { max-width: 960px; margin: 0 auto; position: relative; z-index: 1; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; }
+.cover h1 { font-size: clamp(40px, 7vw, 76px); margin: 14px 0 18px; }
+.cover p { font-size: 18px; max-width: 640px; opacity: 0.95; }
+.cover-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.cover-meta span { background: rgba(80,35,20,0.28); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 600; }
+
+/* ---------- contenido ---------- */
+main { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+section.block { padding-top: 56px; }
+.section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+.section-head .num { font-family: var(--display); color: var(--scarlet); font-size: 22px; }
+.section-head h2 { font-size: clamp(28px, 4.4vw, 40px); }
+.lead { font-size: 18px; color: var(--cocoa-2); max-width: 720px; }
+
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 18px; padding: 22px 24px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+
+/* tarjetas de perfil en el índice */
+.who { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-top: 20px; }
+.who a {
+  display: block; text-decoration: none; color: var(--cocoa);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.who a:hover { transform: translateY(-2px); border-color: var(--scarlet); }
+.who .ico { font-size: 26px; line-height: 1; }
+.who b { display: block; font-family: var(--display); font-weight: 400; font-size: 19px; margin: 8px 0 4px; }
+.who small { color: var(--cocoa-3); font-size: 13px; line-height: 1.4; display: block; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cocoa-2); background: var(--bone); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
+.table-wrap table th:first-child, .table-wrap table td:first-child { position: sticky; left: 0; background: inherit; }
+.table-wrap tbody tr { background: var(--paper); }
+.matrix td:not(:first-child), .matrix th:not(:first-child) { text-align: center; white-space: nowrap; }
+.matrix td:first-child { min-width: 220px; }
+.y, .v, .n { display: inline-block; min-width: 38px; border-radius: 999px; font-size: 12px; font-weight: 700; padding: 2px 8px; }
+.y { background: var(--olive-soft); color: var(--olive); }
+.v { background: var(--amber-soft); color: #7A4A00; }
+.n { color: var(--cocoa-3); opacity: 0.6; }
+
+/* ciclo semanal */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; counter-reset: step; margin-top: 18px; }
+.flow div {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 16px 14px 14px; position: relative;
+}
+.flow div::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--scarlet); color: var(--bone); font-weight: 700; font-size: 14px; margin-bottom: 10px;
+}
+.flow b { display: block; font-size: 15px; margin-bottom: 4px; }
+.flow small { display: block; font-size: 13px; color: var(--cocoa-2); line-height: 1.45; }
+.flow em { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--scarlet); }
+
+/* glosario */
+dl.gloss { display: grid; grid-template-columns: 200px 1fr; gap: 0; margin: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--paper); }
+dl.gloss dt, dl.gloss dd { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
+dl.gloss dt { font-weight: 700; background: var(--bone); }
+dl.gloss dt:last-of-type, dl.gloss dd:last-of-type { border-bottom: 0; }
+
+/* capítulos de perfil */
+.profile { margin-top: 72px; }
+.profile-head {
+  background: var(--cocoa); color: var(--bone); border-radius: 22px; padding: 28px 28px 24px;
+  display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: center;
+}
+.profile-head .badge {
+  width: 72px; height: 72px; border-radius: 20px; background: var(--scarlet);
+  display: grid; place-items: center; font-size: 36px;
+}
+.profile-head .tag { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; opacity: .75; }
+.profile-head h2 { font-size: clamp(30px, 4.6vw, 44px); margin: 4px 0 6px; }
+.profile-head p { margin: 0; opacity: .9; max-width: 640px; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 14px 0 0; }
+.facts div { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.facts span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cocoa-3); }
+.facts b { font-size: 15px; overflow-wrap: anywhere; }
+
+.screens { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.screens div { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.screens b { display: block; font-size: 15px; }
+.screens small { color: var(--cocoa-2); font-size: 13.5px; line-height: 1.45; display: block; margin-top: 2px; }
+
+details.task { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; margin: 10px 0; }
+details.task > summary {
+  cursor: pointer; list-style: none; padding: 16px 20px; font-weight: 700; font-size: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+details.task > summary::-webkit-details-marker { display: none; }
+details.task > summary::after { content: "+"; margin-left: auto; font-size: 22px; color: var(--scarlet); font-weight: 400; line-height: 1; }
+details.task[open] > summary::after { content: "–"; }
+details.task > summary .when { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--scarlet); background: var(--scarlet-soft); padding: 3px 9px; border-radius: 999px; }
+details.task .body { padding: 0 22px 18px; border-top: 1px dashed var(--line); }
+details.task .body > :first-child { margin-top: 16px; }
+ol.steps { counter-reset: s; list-style: none; padding-left: 0; }
+ol.steps > li { counter-increment: s; position: relative; padding-left: 40px; margin: 10px 0; }
+ol.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 0;
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--scarlet); color: var(--scarlet);
+  display: grid; place-items: center; font-weight: 700; font-size: 13px;
+}
+
+.note { border-left: 4px solid var(--scarlet); background: var(--scarlet-soft); padding: 12px 16px; border-radius: 0 12px 12px 0; margin: 14px 0; font-size: 15px; }
+.note.ok { border-color: var(--olive); background: var(--olive-soft); }
+.note.info { border-color: var(--cocoa-3); background: var(--paper); }
+.note b:first-child { display: block; margin-bottom: 2px; }
+
+.cant { display: grid; grid-template-columns: 1fr auto; gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--paper); }
+.cant div { padding: 10px 16px; border-bottom: 1px solid var(--line-soft); font-size: 15px; }
+.cant div:nth-child(even) { color: var(--cocoa-2); font-size: 14px; text-align: right; }
+.cant div:nth-last-child(-n+2) { border-bottom: 0; }
+
+.say { display: grid; gap: 8px; }
+.say p { margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 16px 16px 16px 4px; padding: 10px 14px; font-size: 15px; max-width: 640px; }
+.say p::before { content: "🗣 "; }
+
+.kiosk-demo { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.kiosk-demo span { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px; text-align: center; font-weight: 700; font-size: 14px; }
+.kiosk-demo span.out { color: var(--scarlet); }
+.kiosk-demo small { display: block; font-weight: 500; font-size: 12px; color: var(--cocoa-3); margin-top: 2px; }
+
+/* capturas */
+figure.shot { margin: 18px 0 8px; }
+figure.shot a { display: block; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 10px 28px -14px rgba(80,35,20,.35); background: #fff; }
+figure.shot img { display: block; width: 100%; height: auto; }
+figure.shot figcaption { font-size: 13.5px; color: var(--cocoa-2); margin-top: 8px; line-height: 1.45; }
+figure.shot figcaption b { color: var(--cocoa); }
+
+footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color: var(--cocoa-3); border-top: 1px solid var(--line); }
+
+@media (max-width: 820px) {
+  .who { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .flow { grid-template-columns: 1fr; }
+  .grid-3, .facts { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  body { font-size: 15.5px; }
+  .topbar { padding: 10px 16px; }
+  .topbar strong { display: none; }
+  .cover { padding: 48px 16px 44px; }
+  main { padding: 0 16px 64px; }
+  .grid-2, .screens { grid-template-columns: 1fr; }
+  .profile-head { grid-template-columns: 1fr; padding: 22px; }
+  .profile-head .badge { width: 56px; height: 56px; font-size: 28px; border-radius: 16px; }
+  dl.gloss { grid-template-columns: 1fr; }
+  dl.gloss dt { border-bottom: 0; padding-bottom: 2px; }
+  dl.gloss dd { padding-top: 2px; }
+  .kiosk-demo { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  details.task > summary { padding: 14px 16px; flex-wrap: wrap; }
+  details.task .body { padding: 0 16px 16px; }
+  .cant { grid-template-columns: 1fr; }
+  .cant div:nth-child(odd) { border-bottom: 0; padding-bottom: 0; }
+  .cant div:nth-child(even) { text-align: left; }
+  figure.shot figcaption::after { content: " Toque la imagen para ampliarla."; color: var(--cocoa-3); }
+}
+@media print {
+  @page { margin: 16mm 14mm; }
+  body { background: #fff; font-size: 11pt; }
+  .topbar { display: none; }
+  .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 40px 28px; }
+  .profile { break-before: page; margin-top: 0; }
+  .profile-head, .flow div::before, .y, .v, .badge, th, dl.gloss dt, .note { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  details.task { break-inside: auto; }
+  details.task:not([open]) > .body { display: block; }
+  figure.shot { break-inside: avoid; }
+  figure.shot a { box-shadow: none; }
+  details.task > summary::after { content: ""; }
+  .table-wrap { overflow: visible; }
+  a { color: var(--cocoa); text-decoration: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <strong>Reloj · Manual</strong>
+  <nav aria-label="Perfiles">
+    <a href="#basicos">Lo básico</a>
+    <a href="#permisos">Permisos</a>
+    <a href="#colaborador">Colaborador</a>
+    <a href="#kiosco">Kiosco</a>
+    <a href="#coordinador">Coordinador</a>
+    <a href="#gerente">Gerente de tienda</a>
+    <a href="#regional">Gerente regional</a>
+    <a href="#rrhh">RR. HH.</a>
+    <a href="#auditor">Auditor</a>
+    <a href="#superadmin">Superadmin</a>
+    <a href="#claude">Con Claude</a>
+    <a href="#problemas">Si algo falla</a>
+  </nav>
+</header>
+
+<div class="cover">
+  <div class="cover-inner">
+    <div class="eyebrow">Manual de usuarios · Piloto Barranquilla</div>
+    <h1>Reloj, paso a paso para cada perfil</h1>
+    <p>Cómo marcar, programar turnos, aprobar, liquidar horas y revisar, explicado para quien lo hace. Busque su perfil y siga sus pasos.</p>
+    <div class="cover-meta">
+      <span>Alto Prado (AP)</span>
+      <span>Buenavista (BV)</span>
+      <span>Región Caribe</span>
+      <span>Versión noviembre 2026</span>
+    </div>
+  </div>
+</div>
+
+<main>
+
+<!-- =================== 1. LO BÁSICO =================== -->
+<section class="block" id="basicos">
+  <div class="section-head"><span class="num">01</span><h2>Lo básico</h2></div>
+  <p class="lead">Reloj registra cuándo entra, sale y almuerza cada persona, con reconocimiento de rostro en una tablet de la tienda. Con esas marcas y el cronograma aprobado calcula llegadas tarde, almuerzos excedidos y horas para nómina.</p>
+
+  <div class="note info"><b>Sobre las imágenes</b> Las capturas de este manual son de una copia de prueba con personas ficticias (marcadas «demo»). Su pantalla mostrará su tienda y su gente.</div>
+
+  <h4>¿Cuál es su perfil?</h4>
+  <div class="who">
+    <a href="#colaborador"><span class="ico">🍔</span><b>Colaborador</b><small>Trabaja en tienda. Solo marca en la tablet; no tiene usuario.</small></a>
+    <a href="#kiosco"><span class="ico">📱</span><b>Kiosco</b><small>El usuario de la tablet de la tienda.</small></a>
+    <a href="#coordinador"><span class="ico">🧑‍🍳</span><b>Coordinador</b><small>Apoya la operación diaria de una tienda.</small></a>
+    <a href="#gerente"><span class="ico">🏪</span><b>Gerente de tienda</b><small>Arma el cronograma de su tienda y lo envía.</small></a>
+    <a href="#regional"><span class="ico">🗺️</span><b>Gerente regional</b><small>Aprueba cronogramas y autoriza excepciones de su región.</small></a>
+    <a href="#rrhh"><span class="ico">🗂️</span><b>Recursos Humanos</b><small>Fichas de personas, novedades y horas para nómina.</small></a>
+    <a href="#auditor"><span class="ico">🔎</span><b>Auditor</b><small>Consulta todo, no cambia nada.</small></a>
+    <a href="#superadmin"><span class="ico">⚙️</span><b>Superadmin</b><small>Administra el sistema completo.</small></a>
+  </div>
+
+  <h4>Direcciones</h4>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Para qué</th><th>Dirección</th><th>Quién</th></tr></thead>
+      <tbody>
+        <tr><td>La aplicación</td><td><code>https://reloj.leia-softwarelab.tech</code></td><td>Todos los perfiles con usuario, menos kiosco</td></tr>
+        <tr><td>La tablet de marcación</td><td><code>https://reloj.leia-softwarelab.tech/kiosco</code><br><small>con «c» y en minúsculas</small></td><td>Kiosco de cada tienda</td></tr>
+        <tr><td>Conector para Claude o ChatGPT</td><td><code>https://timermcp.leia-softwarelab.tech/mcp</code></td><td>Todos los perfiles con usuario, menos kiosco</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>Entrar a la aplicación</h4>
+  <ol class="steps">
+    <li>Abra la dirección de la aplicación en el computador o en el celular.</li>
+    <li>Escriba su correo de Reloj y su contraseña, y pulse <span class="ui">Entrar</span>.</li>
+    <li>A la izquierda (o arriba en el celular) está el menú. Debajo aparece su <b>alcance</b>: las tiendas que usted puede ver. Si una tienda no aparece, no está a su cargo.</li>
+  </ol>
+  <figure class="shot"><a href="img/login.jpg" target="_blank" rel="noopener"><img src="img/login.jpg" width="1600" height="950" alt="Pantalla de entrada" loading="lazy"></a><figcaption><b>Pantalla de entrada.</b> Correo y contraseña; el código TOTP solo si su usuario lo tiene activado.</figcaption></figure>
+  <div class="note info"><b>Bueno saber</b>
+    La sesión dura 12 horas; después la app pide entrar de nuevo. Si se equivoca varias veces con la contraseña, espere un minuto: la app limita los intentos para proteger las cuentas. Si la olvida, pídala al administrador; la app no envía correos de recuperación.</div>
+  <div class="note info"><b>El menú es igual para todos</b>
+    Todos ven las mismas opciones en el menú, pero cada pantalla solo muestra o deja hacer lo que su perfil permite. Si abre una pantalla que no le corresponde, verá un aviso de «sin permiso» o «solo consulta». No es un error.</div>
+
+  <h4>Cómo fluye la semana</h4>
+  <div class="flow">
+    <div><em>Gerente de tienda</em><b>Arma el cronograma</b><small>Turnos, descansos y novedades de cada persona. Lo envía.</small></div>
+    <div><em>Gerente regional</em><b>Revisa y aprueba</b><small>O lo devuelve con observaciones para corregir.</small></div>
+    <div><em>Colaboradores</em><b>Marcan en la tablet</b><small>Entrada, salida y regreso de almuerzo, y salida.</small></div>
+    <div><em>Reloj</em><b>Compara</b><small>Marcas contra el turno aprobado: tardanzas, almuerzo, horas.</small></div>
+    <div><em>RR. HH.</em><b>Cierra el periodo</b><small>Horas por tipo para nómina y novedades del periodo.</small></div>
+  </div>
+  <div class="note"><b>La regla más importante</b>
+    Reloj solo mide llegadas tarde, almuerzos y horas programadas contra un cronograma <b>aprobado</b>. Si la semana de una tienda queda en borrador o enviada sin aprobar, la app registra las marcas, pero no tiene contra qué compararlas.</div>
+
+  <h4>Palabras que verá en la app</h4>
+  <dl class="gloss">
+    <dt>Cronograma</dt><dd>La programación semanal de turnos de una tienda, de lunes a domingo. Pasa por estos estados: <b>borrador</b> (se está armando), <b>enviado</b> (espera al regional), <b>aprobado</b> (vigente), <b>devuelto</b> (con observaciones para corregir) y <b>sustituido</b> (lo reemplazó una versión nueva).</dd>
+    <dt>Turno</dt><dd>Hora de entrada, hora de salida y minutos de almuerzo de un día. Un turno puede cruzar la medianoche: 20:00 a 04:00 es un solo turno.</dd>
+    <dt>Responsable de turno</dt><dd>Gerente o coordinador. Siempre debe haber uno en tienda mientras está abierta.</dd>
+    <dt>Franja sin responsable</dt><dd>Horas del día en que la tienda abre y no hay gerente ni coordinador en turno.</dd>
+    <dt>Novedad</dt><dd>Vacaciones, incapacidad, capacitación, licencia o retiro. La <b>programada</b> se registra con anticipación. La <b>urgente</b> pasa el mismo día, exige causa y la aprueba el regional.</dd>
+    <dt>Excepción del día</dt><dd>Un ajuste puntual de asistencia: justificado (por ejemplo, una cita médica), franco o no labora, o cambio de turno.</dd>
+    <dt>Enrolar</dt><dd>Registrar el rostro de un colaborador para que la tablet lo reconozca. Requiere su consentimiento.</dd>
+    <dt>Acceso</dt><dd>Permiso para que un colaborador marque en otra tienda de la región, además de la suya.</dd>
+    <dt>Movilidad</dt><dd>Préstamo de un colaborador a otra tienda por unos días: cobertura, capacitación o apoyo. No cambia su tienda base.</dd>
+    <dt>Llegada tarde</dt><dd>Entrada después de la hora del turno aprobado, con 10 minutos de gracia.</dd>
+    <dt>Almuerzo excedido</dt><dd>El tiempo entre «Salida almuerzo» y «Entrada almuerzo» supera los minutos de almuerzo del turno.</dd>
+    <dt>Respaldo PIN</dt><dd>Marcación excepcional cuando la tablet no reconoce a alguien. La autoriza un supervisor con su PIN y un motivo, y queda en la auditoría.</dd>
+  </dl>
+
+  <h4>Usuarios del piloto</h4>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Perfil</th><th>Usuario</th><th>Qué tiendas ve</th></tr></thead>
+      <tbody>
+        <tr><td>Superadmin</td><td><code>admin@reloj.cr</code></td><td>Todo el sistema</td></tr>
+        <tr><td>Gerente regional</td><td><code>regional.caribe@reloj.cr</code></td><td>Región Caribe: AP y BV</td></tr>
+        <tr><td>Gerente de tienda</td><td><code>gerente.ap@reloj.cr</code></td><td>Solo Alto Prado</td></tr>
+        <tr><td>Gerente de tienda</td><td><code>gerente.bv@reloj.cr</code></td><td>Solo Buenavista</td></tr>
+        <tr><td>Coordinador</td><td><code>coordinador.ap@reloj.cr</code></td><td>Solo Alto Prado</td></tr>
+        <tr><td>Recursos Humanos</td><td><code>rrhh@reloj.cr</code></td><td>Todas las tiendas</td></tr>
+        <tr><td>Auditor</td><td><code>auditor.prueba@reloj.cr</code></td><td>Todas, solo lectura</td></tr>
+        <tr><td>Kiosco</td><td><code>kiosco.ap@reloj.cr</code> · <code>kiosco.bv@reloj.cr</code></td><td>La tablet de su tienda</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:10px;font-size:14px;color:var(--cocoa-3)">Las contraseñas las entrega el administrador a cada persona; no se escriben en este manual. Los usuarios se crean desde el servidor, no desde la app.</p>
+</section>
+
+<!-- =================== 2. PERMISOS =================== -->
+<section class="block" id="permisos">
+  <div class="section-head"><span class="num">02</span><h2>Qué puede hacer cada perfil</h2></div>
+  <p class="lead">Cada perfil hace solo lo de su rol y solo en sus tiendas. La app vuelve a comprobar el permiso en cada acción, también cuando se trabaja con Claude o ChatGPT.</p>
+  <p><span class="y">Sí</span> puede hacerlo · <span class="v">Ver</span> solo consulta · <span class="n">—</span> no puede</p>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr><th>Acción</th><th>Kiosco</th><th>Coord.</th><th>Gerente</th><th>Regional</th><th>RR. HH.</th><th>Auditor</th><th>Superadmin</th></tr></thead>
+      <tbody>
+        <tr><td>Marcar en la tablet (los colaboradores)</td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td></tr>
+        <tr><td>Activar la tablet de su tienda</td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Revocar una tablet</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Enrolar rostros</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Ver marcaciones y asistencia</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Registrar excepciones del día</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Aprobar correcciones de marcación</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Ver el cronograma</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Armar y enviar el cronograma</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Aprobar o devolver el cronograma</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Registrar novedades</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Aprobar novedades urgentes y horas adicionales</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Autorizar accesos y movilidad entre tiendas</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Control de horas</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Crear, editar, trasladar o retirar personas</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Ver salario en la ficha</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Configurar tipos de jornada</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Expediente del colaborador en PDF</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Historial de auditoría</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Crear regiones y tiendas, ajustes globales</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Trabajar con Claude o ChatGPT</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =================== COLABORADOR =================== -->
+<section class="profile" id="colaborador">
+  <div class="profile-head">
+    <div class="badge">🍔</div>
+    <div>
+      <div class="tag">Perfil · Sin usuario</div>
+      <h2>Colaborador de tienda</h2>
+      <p>Usted no necesita usuario ni contraseña. Solo marca con su rostro en la tablet de la tienda, cuatro veces al día.</p>
+    </div>
+  </div>
+
+  <h4>Antes del primer día</h4>
+  <p>Su gerente o coordinador lo <b>enrola</b>: le toma tres fotos del rostro en la app y le pide su consentimiento para usar sus datos biométricos (Ley 1581 de 2012). Sin ese paso la tablet no lo reconoce.</p>
+
+  <h4>Sus cuatro marcas</h4>
+  <div class="kiosk-demo">
+    <span>→ Entrada<small>al llegar</small></span>
+    <span class="out">🍴 Salida almuerzo<small>al salir a almorzar</small></span>
+    <span>🍴 Entrada almuerzo<small>al volver</small></span>
+    <span class="out">← Salida<small>al terminar</small></span>
+  </div>
+  <ol class="steps">
+    <li>Párese frente a la tablet y ponga el rostro dentro del óvalo. Quítese gorra o tapabocas si los tiene puestos.</li>
+    <li>Cuando aparezca el recuadro verde sobre su cara, pulse el botón que corresponde.</li>
+    <li>La pantalla muestra su nombre, la marca, la fecha, la hora y la tienda. Si dice otro nombre, avise de inmediato a su coordinador o gerente.</li>
+  </ol>
+  <figure class="shot"><a href="img/kiosco-marcar.jpg" target="_blank" rel="noopener"><img src="img/kiosco-marcar.jpg" width="1600" height="1075" alt="La tablet lista para marcar" loading="lazy"></a><figcaption><b>La tablet lista para marcar.</b> Arriba, la tienda y «En línea». Debajo de la cámara, los cuatro botones. En la tablet verá su cara en el óvalo; la copia de prueba muestra un patrón verde porque no tiene cámara real.</figcaption></figure>
+  <div class="note info"><b>Si pulsa dos veces</b>
+    La tablet ignora una segunda marca igual dentro de los siguientes 45 segundos. No hace falta volver a marcar.</div>
+  <div class="note info"><b>Si al volver del almuerzo pulsa «Entrada»</b>
+    Reloj la registra igual como «Entrada almuerzo», porque ya había salido a almorzar.</div>
+
+  <h4>Cómo se mide su día</h4>
+  <ul>
+    <li><b>Llegada tarde:</b> cuenta si su Entrada es más de 10 minutos después de la hora de su turno aprobado.</li>
+    <li><b>Almuerzo:</b> se compara el tiempo entre sus dos marcas de almuerzo con los minutos que tenía programados (normalmente 30).</li>
+    <li><b>Horas trabajadas:</b> de Entrada a Salida, menos el almuerzo. El trabajo después de las 19:00 cuenta como nocturno.</li>
+  </ul>
+
+  <h4>Si algo sale mal</h4>
+  <div class="cant">
+    <div>La tablet no lo reconoce</div><div>Pida al coordinador o gerente la marcación con PIN de supervisor.</div>
+    <div>Olvidó marcar</div><div>Avise el mismo día al coordinador o gerente para que registre la corrección con un motivo.</div>
+    <div>Lo enviaron a otra tienda</div><div>Marque en la tablet de esa tienda. El regional debe haberlo autorizado antes.</div>
+    <div>No hay internet</div><div>Marque normal: la tablet guarda la marca y la envía cuando vuelve la conexión.</div>
+  </div>
+</section>
+
+<!-- =================== KIOSCO =================== -->
+<section class="profile" id="kiosco">
+  <div class="profile-head">
+    <div class="badge">📱</div>
+    <div>
+      <div class="tag">Perfil · Tablet de la tienda</div>
+      <h2>Kiosco</h2>
+      <p>Un usuario por tienda que solo sirve para activar la tablet de marcación. Una vez activa, la tablet muestra únicamente la cámara y los cuatro botones.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuarios del piloto</span><b>kiosco.ap@reloj.cr · kiosco.bv@reloj.cr</b></div>
+    <div><span>Dirección</span><b>/kiosco</b></div>
+    <div><span>Quién lo maneja</span><b>Gerente o coordinador de la tienda</b></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Activar la tablet <span class="when">Una sola vez</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En la tablet, abra Chrome y vaya a <code>https://reloj.leia-softwarelab.tech/kiosco</code> (con «c» y en minúsculas).</li>
+        <li>En <b>Tienda</b> escriba el código o el nombre: <code>AP</code> o <code>Alto Prado</code>.</li>
+        <li>En <b>Contraseña del kiosco</b> escriba la contraseña que le entregó el administrador y pulse <span class="ui">Activar kiosco</span>.</li>
+        <li>Cuando el navegador pregunte, pulse <span class="ui">Permitir</span> para usar la cámara.</li>
+        <li>Espere a que abajo a la izquierda diga <b>Modelos listos</b>. La tablet ya puede marcar.</li>
+      </ol>
+      <figure class="shot"><a href="img/kiosco-activar.jpg" target="_blank" rel="noopener"><img src="img/kiosco-activar.jpg" width="1600" height="950" alt="Activación del kiosco" loading="lazy"></a><figcaption><b>Activación del kiosco.</b> Tienda (código o nombre) y la contraseña del kiosco. Se hace una sola vez por tablet.</figcaption></figure>
+      <div class="note ok"><b>Queda en modo tienda</b>
+        Aunque se recargue o se apague, la tablet vuelve sola a la pantalla de marcación. No muestra menú ni datos de la app.</div>
+      <div class="note info"><b>Recomendaciones de instalación</b>
+        Fije la tablet a la altura de la cara, con luz de frente y no a contraluz. Déjela conectada a la corriente. En Chrome use «Agregar a la pantalla principal» para abrirla a pantalla completa.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Marcación con PIN de supervisor <span class="when">Excepción</span></summary>
+    <div class="body">
+      <p>Cuando la tablet no reconoce a alguien (rostro sin enrolar, mala luz, cámara dañada), un supervisor puede registrar la marca:</p>
+      <ol class="steps">
+        <li>Pulse <span class="ui">Respaldo PIN supervisor</span>.</li>
+        <li>Elija el <b>tipo de evento</b> (Entrada, Salida, etc.) y al <b>colaborador</b>.</li>
+        <li>Escriba el <b>motivo</b> y el <b>PIN de supervisor</b>, y pulse <span class="ui">Autorizar marcación</span>.</li>
+      </ol>
+      <figure class="shot"><a href="img/kiosco-pin.jpg" target="_blank" rel="noopener"><img src="img/kiosco-pin.jpg" width="1600" height="1125" alt="Respaldo con PIN de supervisor, a la derecha: tipo de evento, colaborador, motivo y PIN" loading="lazy"></a><figcaption><b>Respaldo con PIN de supervisor</b>, a la derecha: tipo de evento, colaborador, motivo y PIN. Los tres datos son obligatorios.</figcaption></figure>
+      <p>Los tres datos son obligatorios y la marca queda en la auditoría con el motivo. No la use como costumbre: si alguien no es reconocido seguido, enróllelo de nuevo.</p>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Tablet perdida o cambiada <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <p>El gerente de tienda o el regional entra a <b>Estructura</b>, busca las tablets de la tienda y pulsa <span class="ui">Revocar</span> en la que ya no se usa. Para activar una nueva se necesita otra vez la contraseña del kiosco.</p>
+    </div>
+  </details>
+
+  <h4>El kiosco no puede</h4>
+  <p>Entrar a la aplicación, consultar datos, ni conectarse a Claude o ChatGPT. Si alguien intenta entrar con este usuario en la página normal, la app responde «Este usuario es solo de kiosco: ábralo en /kiosco».</p>
+</section>
+
+<!-- =================== COORDINADOR =================== -->
+<section class="profile" id="coordinador">
+  <div class="profile-head">
+    <div class="badge">🧑‍🍳</div>
+    <div>
+      <div class="tag">Perfil · Una tienda</div>
+      <h2>Coordinador</h2>
+      <p>Apoya la operación diaria de su tienda: que la tablet funcione, que todos estén enrolados y que las marcas del día estén completas. En la app su perfil aparece como «Operador».</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuario del piloto</span><b>coordinador.ap@reloj.cr</b></div>
+    <div><span>Ve</span><b>Solo su tienda</b></div>
+    <div><span>Responde a</span><b>Gerente de tienda</b></div>
+  </div>
+
+  <h4>Pantallas que usa</h4>
+  <div class="screens">
+    <div><b>Enrolar</b><small>Registrar el rostro de colaboradores nuevos o de quienes la tablet no reconoce.</small></div>
+    <div><b>Operación</b><small>Marcaciones del día, anomalías abiertas y estado de las tablets.</small></div>
+    <div><b>Reportes</b><small>Asistencia por día: presentes, tarde, ausentes, salida temprana, omisiones. Registrar excepciones del día.</small></div>
+    <div><b>Kiosco</b><small>Volver a activar la tablet si se desconfigura.</small></div>
+  </div>
+
+  <h4>Su rutina</h4>
+  <details class="task" open>
+    <summary>Al abrir la tienda <span class="when">Diario</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Verifique que la tablet esté encendida, en la pantalla de marcación y con <b>Modelos listos</b>. Arriba a la derecha debe decir <b>En línea</b>.</li>
+        <li>Si muestra la pantalla de activación, vuelva a activarla con el usuario kiosco de la tienda.</li>
+        <li>En <b>Operación</b>, revise en <b>Terminales</b> que la tablet haya reportado señal reciente.</li>
+      </ol>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Enrolar a un colaborador <span class="when">Ingresos</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Entre a <b>Enrolar</b> y elija al colaborador de la lista. Si no aparece, RR. HH. todavía no lo ha creado: pídaselo.</li>
+        <li>Léale el texto de consentimiento y, si acepta, marque la casilla. Sin consentimiento no se puede enrolar.</li>
+        <li>Con el rostro frente a la cámara, capture las <b>3 muestras</b> (mínimo 2). Pida que gire un poco la cabeza entre una y otra.</li>
+        <li>Pulse <span class="ui">Guardar</span>. Pida que haga una marca de prueba en la tablet.</li>
+      </ol>
+      <figure class="shot"><a href="img/coord-enrolar.jpg" target="_blank" rel="noopener"><img src="img/coord-enrolar.jpg" width="1600" height="1007" alt="Enrolar" loading="lazy"></a><figcaption><b>Enrolar.</b> A la izquierda, la gente de la tienda con «sin enrolar» en quien falta. A la derecha, la cámara, el botón <b>Capturar</b> (1, 2, 3) y el consentimiento.</figcaption></figure>
+      <div class="note info"><b>Datos sensibles</b> El rostro es un dato biométrico. Solo se guarda una plantilla cifrada, no la foto.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Revisar las marcas del día <span class="when">Diario</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Reportes</b>, elija su tienda y el día. Verá cada persona con su estado: Presente, Tarde, Ausente, Salida temprana u Omisión (le falta una marca).</li>
+        <figure class="shot"><a href="img/coord-reportes.jpg" target="_blank" rel="noopener"><img src="img/coord-reportes.jpg" width="1600" height="1054" alt="Reportes" loading="lazy"></a><figcaption><b>Reportes.</b> Filtros arriba (tienda, colaborador, día, mes); tarjetas con presentes, ausentes, tardes y omisiones; abajo, gráficos del mes.</figcaption></figure>
+        <li>En <b>Operación</b>, revise las <b>Anomalías</b> abiertas (por ejemplo, una marca muy fuera de turno o en otra tienda).</li>
+        <li>Si alguien olvidó marcar, en <b>Operación</b> seleccione la marcación y registre la <b>Corrección</b> con el motivo. El gerente de tienda la aprueba.</li>
+      </ol>
+      <figure class="shot"><a href="img/coord-operacion.jpg" target="_blank" rel="noopener"><img src="img/coord-operacion.jpg" width="1600" height="1007" alt="Operación" loading="lazy"></a><figcaption><b>Operación.</b> Elija su tienda arriba. A la izquierda, las marcas del día; al seleccionar una, a la derecha aparece su detalle y el formulario de <b>Corrección</b> con motivo.</figcaption></figure>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Registrar una excepción del día <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Reportes</b>, seleccione la fila del colaborador y el día.</li>
+        <li>En <b>Excepción del día</b> elija: <b>Justificado</b> (cita médica, diligencia autorizada), <b>Franco / no labora</b> o <b>Cambio de turno</b>.</li>
+        <li>Escriba el motivo y guarde. La ausencia o tardanza deja de contar como injustificada.</li>
+      </ol>
+      <p>Vacaciones, incapacidades y licencias no son excepciones: son novedades y las registra el gerente o RR. HH.</p>
+    </div>
+  </details>
+
+  <h4>No puede, y a quién acudir</h4>
+  <div class="cant">
+    <div>Ver o armar el cronograma</div><div>Gerente de tienda</div>
+    <div>Aprobar correcciones de marcación</div><div>Gerente de tienda</div>
+    <div>Registrar vacaciones, incapacidades o licencias</div><div>Gerente de tienda o RR. HH.</div>
+    <div>Revocar una tablet</div><div>Gerente de tienda o regional</div>
+    <div>Ver otras tiendas o salarios</div><div>No aplica a su perfil</div>
+  </div>
+</section>
+
+<!-- =================== GERENTE DE TIENDA =================== -->
+<section class="profile" id="gerente">
+  <div class="profile-head">
+    <div class="badge">🏪</div>
+    <div>
+      <div class="tag">Perfil · Una tienda</div>
+      <h2>Gerente de tienda</h2>
+      <p>Arma cada semana el cronograma de su tienda, lo envía al regional y vela por que las marcas y novedades de su gente estén al día.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuarios del piloto</span><b>gerente.ap@reloj.cr · gerente.bv@reloj.cr</b></div>
+    <div><span>Ve</span><b>Solo su tienda</b></div>
+    <div><span>Responde a</span><b>Gerente regional</b></div>
+  </div>
+
+  <h4>Pantallas que usa</h4>
+  <div class="screens">
+    <div><b>Planificador</b><small>Armar, guardar y enviar el cronograma semanal. Horario de apertura de la tienda.</small></div>
+    <div><b>Novedades</b><small>Vacaciones, incapacidades, capacitaciones, licencias y urgencias.</small></div>
+    <div><b>Horas</b><small>Horas programadas frente a trabajadas, excesos e incidencias por persona.</small></div>
+    <div><b>Operación</b><small>Marcaciones del día, anomalías y aprobar correcciones.</small></div>
+    <div><b>Reportes</b><small>Asistencia diaria y mensual; excepciones del día.</small></div>
+    <div><b>Enrolar · Estructura</b><small>Registrar rostros; revocar una tablet perdida.</small></div>
+  </div>
+
+  <h4>Su semana</h4>
+  <div class="flow" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div><em>Miércoles o jueves</em><b>Armar</b><small>El cronograma de la semana siguiente.</small></div>
+    <div><em>Antes del viernes</em><b>Enviar</b><small>Sin pendientes por corregir.</small></div>
+    <div><em>Si vuelve devuelto</em><b>Corregir</b><small>Leer observaciones y enviar de nuevo.</small></div>
+    <div><em>Diario</em><b>Revisar</b><small>Marcas, correcciones y novedades.</small></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Armar el cronograma en el Planificador <span class="when">Semanal</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Entre a <b>Planificador</b>. En <b>Semana (lunes)</b> elija el lunes de la semana a programar.</li>
+        <li>Si la tienda no tiene cronograma esa semana, pulse <span class="ui">Crear cronograma</span>. Queda en <b>borrador</b>.</li>
+        <li>En la grilla verá a su gente en filas y los días en columnas. Seleccione una o varias celdas (una persona, uno o varios días).</li>
+        <li>Elija qué poner:
+          <ul>
+            <li><b>Turno:</b> escriba entrada, salida y minutos de almuerzo (normalmente 30).</li>
+            <li><b>Descanso:</b> el día libre de la semana.</li>
+            <li><b>Novedad:</b> vacaciones, incapacidad, etc., ya registradas.</li>
+            <li><b>Vaciar:</b> borra lo que había en la celda.</li>
+          </ul>
+        </li>
+        <li>Pulse <span class="ui">Aplicar</span>. Verá «N celda(s) modificadas; pulse Guardar».</li>
+        <li>Repita con el resto de su equipo y pulse <span class="ui">Guardar (N)</span>. Los totales se recalculan al guardar.</li>
+      </ol>
+      <figure class="shot"><a href="img/gerente-planificador.jpg" target="_blank" rel="noopener"><img src="img/gerente-planificador.jpg" width="1600" height="1088" alt="Planificador en borrador" loading="lazy"></a><figcaption><b>Planificador en borrador.</b> Arriba, semana y tienda. En rojo, las franjas sin gerente ni coordinador; en amarillo, las advertencias. En la grilla, cada persona con su jornada y la etiqueta <b>Responsable</b> si es encargado. Abajo, <b>Guardar</b> y <b>Enviar al gerente de zona</b>.</figcaption></figure>
+      <div class="note info"><b>Turnos que pasan la medianoche</b>
+        Un cierre de 20:00 a 04:00 se escribe así, con salida menor que la entrada. En la planilla de Excel se escribía «20 a 28»: es lo mismo. Alto Prado abre de 08:00 a 04:00.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Revisar antes de enviar <span class="when">Semanal</span></summary>
+    <div class="body">
+      <p>Antes de enviar, revise en la misma pantalla:</p>
+      <ul>
+        <li><b>Total</b> de cada persona: debe coincidir con su jornada (42 horas a tiempo completo desde julio de 2026). Cada día de vacaciones o incapacidad descuenta 7 horas.</li>
+        <li><b>Ningún día vacío:</b> cada persona debe tener turno, descanso o novedad los siete días.</li>
+        <li><b>Un descanso por semana</b> como mínimo.</li>
+        <li><b>Responsable:</b> franjas en que la tienda abre sin gerente ni coordinador. Corríjalas moviendo un turno.</li>
+        <li><b>Advertencias:</b> más de 9 horas en un día, turnos fuera del horario de la tienda o días distintos a la jornada de la persona.</li>
+        <li><b>Ficha incompleta:</b> la persona no tiene tipo de jornada o cédula. Pídale a RR. HH. que la complete.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Enviar al regional y corregir si vuelve <span class="when">Semanal</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Con todo guardado, pulse <span class="ui">Enviar al gerente de zona</span>. El estado cambia a <b>enviado</b> y la pantalla dice «En revisión del gerente de zona». Ya no se puede editar.</li>
+        <li>Si el regional lo <b>aprueba</b>, queda vigente y Reloj empieza a medir tardanzas y almuerzos contra esos turnos.</li>
+        <li>Si lo <b>devuelve</b>, lea sus observaciones arriba de la grilla, corrija, pulse <span class="ui">Guardar</span> y envíe de nuevo.</li>
+      </ol>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Cambiar un cronograma ya aprobado <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En el Planificador, con la semana aprobada en pantalla, escriba la <b>justificación del cambio</b> (obligatoria) y pulse <span class="ui">Nueva versión</span>.</li>
+        <li>Se crea un borrador con los mismos turnos. La versión aprobada <b>sigue vigente</b> mientras tanto.</li>
+        <li>Haga los cambios, guarde y envíe. Cuando el regional apruebe la nueva versión, la anterior queda como <b>sustituida</b>.</li>
+      </ol>
+      <figure class="shot"><a href="img/gerente-planificador-aprobado.jpg" target="_blank" rel="noopener"><img src="img/gerente-planificador-aprobado.jpg" width="1600" height="1103" alt="Cronograma aprobado" loading="lazy"></a><figcaption><b>Cronograma aprobado.</b> Junto a la tienda dice «v1 · aprobado». Abajo están la justificación del cambio y el botón <b>Nueva versión</b>.</figcaption></figure>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Registrar una novedad <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Entre a <b>Novedades</b> y pulse <span class="ui">Registrar novedad</span>.</li>
+        <li>Elija al empleado, el tipo (vacaciones, incapacidad, capacitación, licencia) y las fechas.</li>
+        <li>Elija la clase:
+          <ul>
+            <li><b>Programada:</b> se sabe con anticipación. Queda en el cronograma de inmediato.</li>
+            <li><b>Urgente:</b> pasó hoy o no estaba prevista. Escriba la causa; la aprueba el regional.</li>
+          </ul>
+        </li>
+      </ol>
+      <figure class="shot"><a href="img/gerente-novedades.jpg" target="_blank" rel="noopener"><img src="img/gerente-novedades.jpg" width="1600" height="1007" alt="Novedades" loading="lazy"></a><figcaption><b>Novedades.</b> Pestañas por estado arriba; a la izquierda la lista con etiquetas (urgente, pendiente); a la derecha el formulario <b>Registrar novedad</b>.</figcaption></figure>
+      <div class="note info"><b>Incapacidades</b> Basta con las fechas. No escriba diagnósticos en la app.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Aprobar correcciones y revisar el día <span class="when">Diario</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Operación</b> verá las marcaciones del día y las correcciones que registró el coordinador.</li>
+        <li>Revise el motivo de cada corrección y apruébela si corresponde. Queda en la auditoría y no se puede borrar.</li>
+        <li>En <b>Horas</b>, elija la semana y abra la fila de una persona para ver cada día: programado, entrada, salida a almuerzo, regreso, salida, neto, almuerzo e incidencias. Si dice <b>sin aprobado</b>, esa semana no tiene cronograma aprobado.</li>
+      </ol>
+      <figure class="shot"><a href="img/gerente-horas-detalle.jpg" target="_blank" rel="noopener"><img src="img/gerente-horas-detalle.jpg" width="1600" height="1054" alt="Control de horas con el detalle de una persona" loading="lazy"></a><figcaption><b>Control de horas con el detalle de una persona.</b> Por día: lo programado, las cuatro marcas, las horas netas, el almuerzo y las incidencias («sin marcas», «sin salida»). Arriba, <b>CSV</b> y <b>XLSX</b> para exportar.</figcaption></figure>
+    </div>
+  </details>
+
+  <h4>No puede, y a quién acudir</h4>
+  <div class="cant">
+    <div>Aprobar su propio cronograma</div><div>Gerente regional</div>
+    <div>Aprobar novedades urgentes u horas adicionales</div><div>Gerente regional</div>
+    <div>Prestar personal a otra tienda o recibirlo</div><div>Gerente regional (movilidad)</div>
+    <div>Crear, editar o retirar personas, ver salarios</div><div>RR. HH.</div>
+    <div>Ver otras tiendas</div><div>No aplica a su perfil</div>
+  </div>
+</section>
+
+<!-- =================== REGIONAL =================== -->
+<section class="profile" id="regional">
+  <div class="profile-head">
+    <div class="badge">🗺️</div>
+    <div>
+      <div class="tag">Perfil · Una región</div>
+      <h2>Gerente regional</h2>
+      <p>Revisa y aprueba los cronogramas de las tiendas de su región, programa a gerentes, coordinadores y relevos, y autoriza lo que sale de lo normal.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuario del piloto</span><b>regional.caribe@reloj.cr</b></div>
+    <div><span>Ve</span><b>Alto Prado y Buenavista</b></div>
+    <div><span>Pantalla de inicio</span><b>Regional</b></div>
+  </div>
+
+  <h4>Pantallas que usa</h4>
+  <div class="screens">
+    <div><b>Regional</b><small>Estado de los cronogramas de cada tienda y lo pendiente por aprobar.</small></div>
+    <div><b>Planificador</b><small>Revisar, aprobar o devolver. También armar turnos de encargados.</small></div>
+    <div><b>Novedades</b><small>Aprobar o rechazar urgentes, horas adicionales y marcas en tienda no autorizada.</small></div>
+    <div><b>Accesos</b><small>Tiendas donde puede marcar cada persona y movilidad entre tiendas.</small></div>
+    <div><b>Horas · Reportes</b><small>Horas trabajadas, excesos y asistencia de toda la región.</small></div>
+    <div><b>Estructura</b><small>Tablets de cada tienda; revocar las que ya no se usan.</small></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Programar a los encargados de la región <span class="when">Semanal, primero</span></summary>
+    <div class="body">
+      <p>Antes de que cada gerente arme su tienda, defina dónde trabaja cada encargado (gerente, coordinador, relevo) y sus descansos:</p>
+      <ol class="steps">
+        <li>En el <b>Planificador</b>, en cada tienda, ponga el turno o el descanso de su gerente y coordinadores.</li>
+        <li>Si un encargado cubre el descanso del gerente de otra tienda, primero autorice su <b>movilidad</b> (abajo) y luego póngale el turno en la tienda destino.</li>
+        <li>Confirme que todas las tiendas tienen encargado todos los días y que nadie queda en dos tiendas el mismo día.</li>
+      </ol>
+      <p>Con Claude esto se hace en un solo mensaje («Alto Prado D lunes, Leidy cubre el lunes…»): vea la skill <b>cronograma-encargados</b> en el capítulo «Con Claude».</p>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Aprobar o devolver un cronograma <span class="when">Semanal</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Regional</b> verá cada tienda con su estado: <b>sin cronograma</b>, borrador, <b>enviado</b>, aprobado o devuelto, y si <b>hay versión vigente</b>.</li>
+        <figure class="shot"><a href="img/regional-inicio.jpg" target="_blank" rel="noopener"><img src="img/regional-inicio.jpg" width="1600" height="1007" alt="Inicio regional" loading="lazy"></a><figcaption><b>Inicio regional.</b> Arriba, lo pendiente de la semana (cronogramas por revisar, urgentes, excesos). Una tarjeta por tienda con su estado, franjas sin responsable y advertencias.</figcaption></figure>
+        <li>Abra el enviado en el <b>Planificador</b>. Revise totales, descansos, franjas sin responsable y advertencias.</li>
+        <li>Si está bien, pulse <span class="ui">Aprobar</span>. Pasa a ser la versión vigente y Reloj mide la semana contra él.</li>
+        <li>Si no, escriba en <b>Observaciones</b> qué corregir (obligatorio) y pulse <span class="ui">Devolver</span>. El gerente lo verá arriba de su grilla.</li>
+      </ol>
+      <figure class="shot"><a href="img/regional-aprobar.jpg" target="_blank" rel="noopener"><img src="img/regional-aprobar.jpg" width="1600" height="1275" alt="Revisión de un cronograma enviado" loading="lazy"></a><figcaption><b>Revisión de un cronograma enviado.</b> Revise franjas y advertencias. Al final, el campo <b>Observaciones</b> y los botones <b>Aprobar</b> y <b>Devolver</b>. «Fuera de movilidad» indica días en que un relevo no está autorizado en esa tienda.</figcaption></figure>
+      <div class="note"><b>No deje semanas sin aprobar</b> Sin cronograma aprobado no se calculan tardanzas, almuerzos excedidos ni horas programadas, y el corte de nómina de RR. HH. lo marca como pendiente.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Decidir novedades <span class="when">Diario</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Novedades</b> use las pestañas <b>Pendientes</b>, <b>Urgentes</b> y <b>Horas adicionales</b>.</li>
+        <li>Seleccione una para ver empleado, tienda, periodo, horas excedentes, causa, evidencia y quién la registró.</li>
+        <li>Pulse <span class="ui">Aprobar</span> o <span class="ui">Rechazar</span>. Rechazar exige un comentario.</li>
+      </ol>
+      <figure class="shot"><a href="img/regional-novedades.jpg" target="_blank" rel="noopener"><img src="img/regional-novedades.jpg" width="1600" height="1007" alt="Novedad urgente seleccionada" loading="lazy"></a><figcaption><b>Novedad urgente seleccionada.</b> A la derecha, empleado, tienda, periodo, causa, evidencia y quién la registró; abajo, el comentario y <b>Aprobar</b> o <b>Rechazar</b>.</figcaption></figure>
+      <p>Las <b>horas adicionales</b> aparecen cuando una persona supera su jornada semanal. Aprobarlas es lo que permite pagarlas como extra; el máximo legal es 12 horas extra por semana.</p>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Accesos y movilidad entre tiendas <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <p><b>Acceso:</b> en <b>Accesos</b>, busque al empleado y marque las <b>tiendas habilitadas para el biométrico</b>. Así puede marcar en otra tienda de su región, de forma permanente o hasta una fecha.</p>
+      <p><b>Movilidad:</b> para prestar a alguien unos días a otra tienda:</p>
+      <ol class="steps">
+        <li>En <b>Accesos</b> pulse <span class="ui">Autorizar movilidad</span>.</li>
+        <li>Elija empleado, tienda destino, fechas desde y hasta, y motivo (cobertura, capacitación, apoyo).</li>
+        <li>Guarde. La persona aparece en el cronograma y en la tablet de la tienda destino esos días. Su tienda base no cambia.</li>
+      </ol>
+      <p>En <b>Historial de autorizaciones</b> verá todas, con su estado (vigente o fuera de periodo). Puede <span class="ui">Revocar</span> una antes de tiempo.</p>
+      <figure class="shot"><a href="img/regional-accesos.jpg" target="_blank" rel="noopener"><img src="img/regional-accesos.jpg" width="1600" height="1054" alt="Accesos y movilidad" loading="lazy"></a><figcaption><b>Accesos y movilidad.</b> La tabla marca en qué tiendas puede marcar cada persona (<b>Base</b> es su tienda). Debajo, el formulario <b>Autorizar movilidad</b> y el historial.</figcaption></figure>
+    </div>
+  </details>
+
+  <h4>No puede, y a quién acudir</h4>
+  <div class="cant">
+    <div>Crear, editar, trasladar o retirar personas</div><div>RR. HH.</div>
+    <div>Configurar tipos de jornada</div><div>RR. HH.</div>
+    <div>Ver tiendas de otras regiones</div><div>No aplica a su perfil</div>
+    <div>Crear tiendas o cambiar ajustes globales</div><div>Superadmin</div>
+  </div>
+</section>
+
+<!-- =================== RR. HH. =================== -->
+<section class="profile" id="rrhh">
+  <div class="profile-head">
+    <div class="badge">🗂️</div>
+    <div>
+      <div class="tag">Perfil · Todas las tiendas</div>
+      <h2>Recursos Humanos</h2>
+      <p>Es dueño de la información de las personas: fichas, jornadas, ingresos, traslados y retiros. Cierra los periodos con las horas listas para nómina.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuario del piloto</span><b>rrhh@reloj.cr</b></div>
+    <div><span>Ve</span><b>Todas las tiendas</b></div>
+    <div><span>Único perfil que</span><b>Crea y retira personas</b></div>
+  </div>
+
+  <h4>Pantallas que usa</h4>
+  <div class="screens">
+    <div><b>Personas</b><small>Fichas de colaboradores y tipos de jornada.</small></div>
+    <div><b>Novedades</b><small>Vacaciones, incapacidades, licencias y retiros.</small></div>
+    <div><b>Horas</b><small>Horas de la semana por persona; exportar a Excel.</small></div>
+    <div><b>Reportes</b><small>Asistencia mensual, horas por tipo y recargos.</small></div>
+    <div><b>Planificador</b><small>Consultar cronogramas de todas las tiendas (solo lectura).</small></div>
+    <div><b>Auditoría</b><small>Consultar quién hizo qué y cuándo.</small></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Crear un colaborador nuevo <span class="when">Ingresos</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Personas</b>, elija arriba la tienda y pulse <span class="ui">Nuevo</span>. A la derecha aparece el formulario «Nuevo colaborador».</li>
+        <li>Datos generales: <b>nombre</b>, <b>código</b> (por ejemplo AP-14), <b>puesto</b> y <b>sede</b>.</li>
+        <li>En <b>Ficha laboral</b>: <b>identificación</b> (cédula), <b>tipo de jornada</b>, <b>salario mensual</b> y estado <b>Activo</b>.</li>
+        <li>Pulse <span class="ui">Crear</span>.</li>
+        <li>Avise al gerente o coordinador de la tienda para que lo <b>enrole</b>. Hasta entonces no puede marcar.</li>
+      </ol>
+      <figure class="shot"><a href="img/rrhh-personas.jpg" target="_blank" rel="noopener"><img src="img/rrhh-personas.jpg" width="1600" height="1054" alt="Personas" loading="lazy"></a><figcaption><b>Personas.</b> A la izquierda, la gente de la tienda elegida arriba. A la derecha, el formulario <b>Nuevo colaborador</b> con la ficha laboral.</figcaption></figure>
+      <div class="note"><b>Sin cédula o sin jornada, no se puede programar</b> El Planificador lo muestra como «Ficha incompleta» y el gerente no puede asignarle turnos.</div>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Trasladar o retirar <span class="when">Cuando pase</span></summary>
+    <div class="body">
+      <p><b>Traslado definitivo:</b> abra la ficha, cambie <b>Sede (traslado)</b> y guarde. Para un préstamo de días no use esto: es una movilidad que autoriza el regional.</p>
+      <p><b>Retiro:</b></p>
+      <ol class="steps">
+        <li>En <b>Novedades</b>, registre la novedad <b>retiro</b> con la fecha del último día.</li>
+        <li>En la ficha, cambie el estado a <b>Retirado</b> ese día y guarde. Desde ese momento la tablet deja de reconocerlo.</li>
+        <li>Pulse <span class="ui">Baja + borrar biometría</span> para eliminar su plantilla facial (Ley 1581). La persona sale de la lista, pero su historial de marcas se conserva para auditoría. Hágalo después de cerrar la nómina del periodo en que se retiró.</li>
+        <li>Si la persona tenía usuario en Reloj (gerente, coordinador), pida al administrador que lo desactive.</li>
+      </ol>
+      <figure class="shot"><a href="img/rrhh-ficha.jpg" target="_blank" rel="noopener"><img src="img/rrhh-ficha.jpg" width="1600" height="1054" alt="Ficha de una persona" loading="lazy"></a><figcaption><b>Ficha de una persona.</b> Sede (traslado), ficha laboral y estado. Abajo, <b>Guardar</b>, <b>Desactivar</b> y <b>Baja + borrar biometría</b>. El expediente en PDF lo descargan el gerente, el regional o el auditor.</figcaption></figure>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Tipos de jornada <span class="when">Configuración</span></summary>
+    <div class="body">
+      <p>En <b>Personas › Tipos de jornada</b> se define cada tipo de contrato: días por semana, horas por semana (o mínimo), minutos de almuerzo, si es <b>responsable de turno</b> (gerente o coordinador), vigencia desde y si tiene días variables. Pulse <span class="ui">Editar</span> para cambiar uno y <span class="ui">Guardar tipo</span>.</p>
+      <p>Las horas del tipo son la referencia para validar cronogramas y detectar excesos. Desde julio de 2026 la jornada máxima es 42 horas semanales (Ley 2101 de 2021).</p>
+      <figure class="shot"><a href="img/rrhh-tipos.jpg" target="_blank" rel="noopener"><img src="img/rrhh-tipos.jpg" width="1600" height="966" alt="Tipos de jornada" loading="lazy"></a><figcaption><b>Tipos de jornada.</b> Días y horas por semana, mínimo, almuerzo y si es responsable de turno. <b>Editar</b> en cada fila; <b>Nuevo tipo</b> al final.</figcaption></figure>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Cerrar la quincena o el mes <span class="when">Quincenal</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Confirme con los regionales que todas las semanas del periodo tengan cronograma <b>aprobado</b>.</li>
+        <li>En <b>Horas</b>, filtre <b>Con pendientes</b>. Resuelva o pida resolver cada caso: marcas incompletas, trabajo sin turno aprobado, excesos sin aprobar.</li>
+        <li>Exporte con <span class="ui">XLSX</span>. En <b>Reportes</b> verá horas ordinarias, extra diurnas, nocturnas y festivas, y recargos.</li>
+      </ol>
+      <figure class="shot"><a href="img/rrhh-horas.jpg" target="_blank" rel="noopener"><img src="img/rrhh-horas.jpg" width="1600" height="1007" alt="Control de horas de todas las tiendas" loading="lazy"></a><figcaption><b>Control de horas de todas las tiendas.</b> RR. HH. ve además la columna de salario. Filtre por zona, tienda, empleado o revisión (<b>Con pendientes</b>).</figcaption></figure>
+      <p>Con Claude, la skill <b>nomina-corte</b> hace este cierre y entrega un Excel con las horas por tipo y una hoja de pendientes. Reloj no calcula valores en pesos: eso lo hace nómina.</p>
+    </div>
+  </details>
+
+  <details class="task" open>
+    <summary>Expediente y datos personales</summary>
+    <div class="body">
+      <p>El <b>expediente de cumplimiento en PDF</b> (marcas, correcciones y novedades de una persona entre dos fechas) lo descargan el gerente, el regional o el auditor desde la ficha en <b>Personas</b>.</p>
+      <div class="note"><b>Ley 1581 de 2012</b> Cédulas, salarios, incapacidades y rostros son datos sensibles. No los copie fuera de la app ni los pegue en chats.</div>
+    </div>
+  </details>
+
+  <h4>No puede, y a quién acudir</h4>
+  <div class="cant">
+    <div>Armar, enviar o aprobar cronogramas</div><div>Gerente de tienda y regional</div>
+    <div>Aprobar novedades urgentes u horas adicionales</div><div>Gerente regional</div>
+    <div>Autorizar accesos o movilidad</div><div>Gerente regional</div>
+    <div>Crear usuarios de la app</div><div>Superadmin</div>
+  </div>
+</section>
+
+<!-- =================== AUDITOR =================== -->
+<section class="profile" id="auditor">
+  <div class="profile-head">
+    <div class="badge">🔎</div>
+    <div>
+      <div class="tag">Perfil · Solo lectura</div>
+      <h2>Auditor</h2>
+      <p>Consulta todo, en todas las tiendas, y no cambia nada. Verifica que lo registrado sea confiable.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuario del piloto</span><b>auditor.prueba@reloj.cr</b></div>
+    <div><span>Ve</span><b>Todas las tiendas</b></div>
+    <div><span>Puede cambiar</span><b>Nada</b></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Revisar la integridad <span class="when">Mensual</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>Entre a <b>Auditoría</b>. Arriba verá el sello de integridad. <b>En verde</b> significa que ningún registro fue alterado por fuera de la app.</li>
+        <li>Cada evento muestra cuándo, quién lo hizo, sobre quién y en qué sede. Seleccione uno para ver los datos técnicos.</li>
+        <li>Fíjese en correcciones de marcación, marcas con PIN de supervisor y novedades urgentes: son las excepciones que vale la pena muestrear.</li>
+      </ol>
+      <figure class="shot"><a href="img/auditor-auditoria.jpg" target="_blank" rel="noopener"><img src="img/auditor-auditoria.jpg" width="1600" height="1007" alt="Auditoría" loading="lazy"></a><figcaption><b>Auditoría.</b> Arriba, el sello de integridad («Todo en orden»). La lista de eventos con quién y cuándo; a la derecha, el detalle del evento elegido.</figcaption></figure>
+    </div>
+  </details>
+  <details class="task" open>
+    <summary>Qué más puede consultar</summary>
+    <div class="body">
+      <ul>
+        <li><b>Reportes y Horas:</b> asistencia, horas por tipo y excesos.</li>
+        <li><b>Planificador y Novedades:</b> cronogramas y novedades de todas las tiendas, con su historial de aprobación.</li>
+        <li><b>Personas:</b> el expediente en PDF de un colaborador entre dos fechas.</li>
+      </ul>
+    </div>
+  </details>
+  <h4>No puede</h4>
+  <p>Marcar, enrolar, activar tablets, crear o editar datos, ni aprobar nada.</p>
+</section>
+
+<!-- =================== SUPERADMIN =================== -->
+<section class="profile" id="superadmin">
+  <div class="profile-head">
+    <div class="badge">⚙️</div>
+    <div>
+      <div class="tag">Perfil · Todo el sistema</div>
+      <h2>Superadmin</h2>
+      <p>Administra la estructura, los ajustes y la seguridad. Tiene todos los permisos de los demás perfiles, en todas las tiendas.</p>
+    </div>
+  </div>
+  <div class="facts">
+    <div><span>Usuario del piloto</span><b>admin@reloj.cr</b></div>
+    <div><span>Ve</span><b>Todo</b></div>
+    <div><span>Úselo para</span><b>Administrar, no para operar</b></div>
+  </div>
+
+  <details class="task" open>
+    <summary>Estructura: regiones y tiendas</summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En <b>Estructura</b>, use <b>Nueva región</b> (nombre y país) y <b>Nueva sede</b> (código, nombre, ciudad y región).</li>
+        <li>En cada sede verá sus tablets activas y podrá revocarlas.</li>
+        <li>Para usuarios nuevos (gerentes, coordinadores, kioscos), pida al técnico que los cree en el servidor con su perfil y su tienda o región.</li>
+      </ol>
+      <figure class="shot"><a href="img/admin-estructura.jpg" target="_blank" rel="noopener"><img src="img/admin-estructura.jpg" width="1600" height="1054" alt="Estructura" loading="lazy"></a><figcaption><b>Estructura.</b> Regiones y sedes con sus tablets (y el botón <b>Revocar</b>). A la derecha, su alcance y los formularios <b>Nueva región</b> y <b>Nueva sede</b>.</figcaption></figure>
+    </div>
+  </details>
+  <details class="task" open>
+    <summary>Ajustes</summary>
+    <div class="body">
+      <ul>
+        <li><b>Política de software:</b> tipos de evento de la tablet, retención de datos en días y nuevo PIN de supervisor.</li>
+        <li><b>Condiciones legales:</b> recargos de extra diurna, nocturna y festiva, ventana nocturna, plazo para corregir marcas, alerta por faltas injustificadas y máximo de horas por semana.</li>
+        <li><b>Informe mensual:</b> dirección a la que se envía el informe de nómina firmado.</li>
+      </ul>
+      <figure class="shot"><a href="img/admin-ajustes.jpg" target="_blank" rel="noopener"><img src="img/admin-ajustes.jpg" width="1600" height="1054" alt="Ajustes" loading="lazy"></a><figcaption><b>Ajustes.</b> Política de software, marca del cliente, turnos y contratos. Más abajo, las condiciones legales y el informe mensual.</figcaption></figure>
+      <div class="note"><b>Cambie el PIN de supervisor de fábrica</b> y entréguelo solo a gerentes y coordinadores.</div>
+    </div>
+  </details>
+  <div class="note info"><b>Buenas prácticas</b>
+    Todo lo que hace queda registrado a su nombre en la auditoría. Para el día a día de una tienda use el usuario de esa persona. La limpieza de datos y otras tareas de mantenimiento se hacen desde el servidor, siempre con respaldo previo.</div>
+</section>
+
+<!-- =================== CLAUDE =================== -->
+<section class="block" id="claude">
+  <div class="section-head"><span class="num">03</span><h2>Trabajar con Claude o ChatGPT</h2></div>
+  <p class="lead">Con el conector, cada persona le pide las cosas a Claude o a ChatGPT por texto o por voz, con su propio usuario. Tiene los mismos permisos y las mismas tiendas que en la app, y todo queda en la auditoría a su nombre.</p>
+
+  <details class="task" open>
+    <summary>Conectar <span class="when">Una vez por persona</span></summary>
+    <div class="body">
+      <ol class="steps">
+        <li>En Claude: <b>Configuración › Conectores › Añadir conector personalizado</b>. En ChatGPT: <b>Ajustes › Aplicaciones</b> (modo desarrollador).</li>
+        <li>Nombre: <code>Reloj CR</code>. URL: <code>https://timermcp.leia-softwarelab.tech/mcp</code>.</li>
+        <li>Se abre la página «Reloj CR pide actuar como usted». Escriba su correo y contraseña de Reloj.</li>
+        <li>En cada chat, active <b>Reloj CR</b> en el menú de herramientas. La conexión dura 12 horas.</li>
+      </ol>
+      <p>Si aparece «No se pudo añadir el conector», use <b>Usar tu propio cliente OAuth</b> con el ID de cliente que le dé el administrador.</p>
+    </div>
+  </details>
+
+  <h4>Skills por perfil</h4>
+  <p>Una skill le enseña a Claude a hacer una tarea completa de su operación. Se instalan en <b>Configuración › Capacidades › Habilidades</b> (con ejecución de código activada).</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Skill</th><th>Para</th><th>Qué hace</th></tr></thead>
+      <tbody>
+        <tr><td><b>cronograma-tienda</b></td><td>Gerente de tienda</td><td>Arma el cronograma desde mensajes de voz o texto, valida horas, descansos y cobertura, y lo muestra con el formato de la planilla de la tienda.</td></tr>
+        <tr><td><b>cronograma-encargados</b></td><td>Gerente regional</td><td>Programa descansos y relevos de gerentes y coordinadores entre tiendas, y muestra la planilla regional con la «D» de cada tienda.</td></tr>
+        <tr><td><b>nomina-corte</b></td><td>RR. HH.</td><td>Cierra la quincena o el mes: Excel con horas por tipo y la lista de pendientes con quién los resuelve.</td></tr>
+        <tr><td><b>tardanzas-almuerzos</b></td><td>RR. HH., regional</td><td>Puntualidad y almuerzos excedidos por tienda y persona, con reincidentes.</td></tr>
+        <tr><td><b>ingresos-retiros</b></td><td>RR. HH.</td><td>Altas, traslados y retiros guiados, y quién falta por enrolar.</td></tr>
+        <tr><td><b>control-jornada</b></td><td>RR. HH., regional</td><td>Semanas sobre 42 horas, extras sobre 12, semanas sin descanso y trabajo dominical habitual.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>Ejemplos de lo que puede pedir</h4>
+  <div class="grid-2">
+    <div class="card"><b>Gerente de tienda</b>
+      <div class="say" style="margin-top:10px">
+        <p>Para la semana del 16, Melissa de 9 y media a 6 lunes y martes, el viernes descansa.</p>
+        <p>¿Qué me falta para enviar el cronograma?</p>
+        <p>Envíalo al regional.</p>
+      </div></div>
+    <div class="card"><b>Gerente regional</b>
+      <div class="say" style="margin-top:10px">
+        <p>Alto Prado D lunes y martes; Leidy cubre esos días.</p>
+        <p>¿Qué cronogramas están pendientes de aprobar?</p>
+        <p>Devuelve el de Buenavista: falta cubrir el domingo.</p>
+      </div></div>
+    <div class="card"><b>Recursos Humanos</b>
+      <div class="say" style="margin-top:10px">
+        <p>Cierra la segunda quincena de noviembre de Alto Prado.</p>
+        <p>¿Quién llegó tarde la semana pasada?</p>
+        <p>¿Quién falta por enrolar?</p>
+      </div></div>
+    <div class="card"><b>Coordinador · Auditor</b>
+      <div class="say" style="margin-top:10px">
+        <p>¿Quién no ha marcado hoy en Alto Prado?</p>
+        <p>Resumen de alertas y anomalías de la semana.</p>
+      </div></div>
+  </div>
+  <div class="note info"><b>Antes de guardar, Claude pregunta</b>
+    Enviar, aprobar, devolver, decidir novedades y autorizar accesos o movilidad piden su confirmación. Ninguna herramienta crea marcaciones ni muestra salarios.</div>
+  <div class="note"><b>Lo que consulta pasa por el proveedor de IA</b>
+    Use la cuenta de la empresa. No pegue cédulas ni diagnósticos médicos en el chat.</div>
+</section>
+
+<!-- =================== PROBLEMAS =================== -->
+<section class="block" id="problemas">
+  <div class="section-head"><span class="num">04</span><h2>Si algo falla</h2></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Qué pasa</th><th>Por qué suele pasar</th><th>Qué hacer</th></tr></thead>
+      <tbody>
+        <tr><td>La tablet no reconoce a alguien</td><td>No está enrolado, mala luz o cambió mucho su aspecto</td><td>Marcar con PIN de supervisor y volver a enrolarlo</td></tr>
+        <tr><td>La tablet dice «No se pudo abrir la cámara»</td><td>Se negó el permiso de cámara o se abrió en otro navegador</td><td>Abrirla en Chrome y permitir la cámara en la configuración del sitio</td></tr>
+        <tr><td>La tablet pide activarse otra vez</td><td>La revocaron o se borraron los datos del navegador</td><td>Activarla con el usuario kiosco de la tienda</td></tr>
+        <tr><td>La página <code>/kiosco</code> da error</td><td>Se escribió con mayúscula o con «k»</td><td>Escribir exactamente <code>/kiosco</code></td></tr>
+        <tr><td>«Credenciales inválidas»</td><td>Correo o contraseña con un error, o usuario desactivado</td><td>Revisar mayúsculas; si persiste, pedir al administrador</td></tr>
+        <tr><td>«Demasiados intentos»</td><td>Varios intentos fallidos seguidos</td><td>Esperar un minuto e intentar de nuevo</td></tr>
+        <tr><td>«Sin permiso» o «solo consulta» en una pantalla</td><td>Esa acción no es de su perfil</td><td>Ver la tabla de permisos y acudir a quien corresponde</td></tr>
+        <tr><td>No puedo editar el cronograma</td><td>Está enviado o aprobado</td><td>Enviado: pedir al regional que lo devuelva. Aprobado: crear una nueva versión</td></tr>
+        <tr><td>Horas dice «sin aprobado»</td><td>La semana no tiene cronograma aprobado</td><td>Enviar y pedir al regional que lo apruebe</td></tr>
+        <tr><td>Un colaborador no aparece en el Planificador</td><td>No está creado, está en otra tienda o tiene ficha incompleta</td><td>RR. HH. lo crea o completa; para préstamos, movilidad del regional</td></tr>
+        <tr><td>Claude no ve las herramientas de Reloj</td><td>El conector no está activo en ese chat o venció la sesión</td><td>Activar Reloj CR en el menú de herramientas o reconectar</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Reloj CR · Manual de usuarios del piloto Barranquilla · Versión noviembre 2026. Las reglas laborales citadas: Ley 2101 de 2021 (jornada de 42 horas desde julio de 2026), Ley 2466 de 2025 (trabajo nocturno desde las 19:00), Código Sustantivo del Trabajo, y Ley 1581 de 2012 (datos personales).
+</footer>
+
+</body>
+</html>
