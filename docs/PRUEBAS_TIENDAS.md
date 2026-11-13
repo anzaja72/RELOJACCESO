@@ -179,7 +179,7 @@ marcar --usuario buenavista@reloj.cr --empleado emp_bv_tc --tienda BAQ-BV --marc
 3. → El lunes muestra: Entrada 08:00 · Sale almuerzo 12:00 · Regresa 12:30 · Salida 16:30 · **Neto 8:00** · **Almuerzo 30′** · sin incidencias. «Programado» es 8:00 (requiere haber **aprobado el cronograma en P-05**; si no, dice «sin aprobado»).
 4. → La salida a almuerzo **no** se cuenta como fin de jornada.
 
-**Con cámara (opcional):** entre como `buenavista@reloj.cr` → **Kiosco** (`/kiosk?site=BAQ-BV`) → pulse **Salida**. → Aparece «¿Salida a almuerzo o salida de trabajo?» con tres botones: **Salida a almuerzo**, **Salida de trabajo** y **Cancelar**.
+**Con cámara (opcional):** entre como `buenavista@reloj.cr` → **Kiosco** (`/kiosk?site=BAQ-BV`) → debajo de la cámara hay cuatro botones: **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**. Cada uno registra su evento directamente, sin preguntas.
 
 | Resultado | ☐ Pasó ☐ Falló ☐ Bloqueado | Evidencia / nota: |
 | --- | --- | --- |
@@ -332,8 +332,8 @@ marcar --usuario buenavista@reloj.cr --corregir <ID> --nueva-hora 08:10 --dia $(
 
 ### P-18 · Prueba con cámara real (opcional, requiere webcam)
 1. Como `buenavista@reloj.cr` → **Enrolar**: elija a «Camila Rojas», marque el consentimiento, capture 3 muestras y **Guardar**. (Lea el texto de consentimiento: debe citar la ley colombiana de datos personales.)
-2. **Kiosco** (`/kiosk?site=BAQ-BV`): pulse **Entrada**, **Salida → Salida a almuerzo**, **Entrada** y **Salida → Salida de trabajo**, con pausas de al menos un minuto entre una y otra (hay una protección contra marcas repetidas de 45 s).
-3. → Cada resultado muestra el nombre del evento, la fecha, la hora y la tienda. La segunda «Entrada» dice «Regreso de almuerzo registrada».
+2. **Kiosco** (`/kiosk?site=BAQ-BV`): pulse **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**, con pausas de al menos un minuto entre una y otra (hay una protección contra marcas repetidas de 45 s).
+3. → Cada resultado muestra el nombre del evento, la fecha, la hora y la tienda. La tercera dice «Entrada almuerzo registrada».
 4. **Horas** muestra las cuatro marcas del día.
 
 | Resultado | ☐ Pasó ☐ Falló ☐ Bloqueado | Evidencia / nota: |

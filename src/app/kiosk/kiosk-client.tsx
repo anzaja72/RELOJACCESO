@@ -28,8 +28,8 @@ function retryable(err: unknown) {
 /** RF-07: los cuatro eventos de la jornada con nombre legible. */
 const EVENT_LABEL: Record<string, string> = {
   IN: "Entrada",
-  BREAK_START: "Salida a almuerzo",
-  BREAK_END: "Regreso de almuerzo",
+  BREAK_START: "Salida almuerzo",
+  BREAK_END: "Entrada almuerzo",
   OUT: "Salida de trabajo",
 };
 
@@ -102,7 +102,6 @@ export function KioskClient() {
   const [clock, setClock] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [eventType, setEventType] = useState<PunchType>("IN");
-  const [askOut, setAskOut] = useState(false);
   const [eventTypes, setEventTypes] = useState<string[]>(["IN", "OUT"]);
   const [pinEmployee, setPinEmployee] = useState("");
   const [pinReason, setPinReason] = useState("");
@@ -504,6 +503,19 @@ export function KioskClient() {
               <LogIn className="size-4" />
               Entrada
             </button>
+            {eventTypes.includes("BREAK_START") && (
+              <button
+                className="punch-btn out shade"
+                disabled={busy || !modelsReady}
+                onClick={() => {
+                  setEventType("BREAK_START");
+                  void punch("BREAK_START");
+                }}
+              >
+                <Utensils className="size-4" />
+                Salida almuerzo
+              </button>
+            )}
             {eventTypes.includes("BREAK_END") && (
               <button
                 className="punch-btn in shade"
@@ -514,13 +526,16 @@ export function KioskClient() {
                 }}
               >
                 <Utensils className="size-4" />
-                Regreso de almuerzo
+                Entrada almuerzo
               </button>
             )}
             <button
               className="punch-btn out shade"
               disabled={busy || !modelsReady}
-              onClick={() => setAskOut(true)}
+              onClick={() => {
+                setEventType("OUT");
+                void punch("OUT");
+              }}
             >
               <LogOut className="size-4" />
               Salida
@@ -595,41 +610,6 @@ export function KioskClient() {
           ) : null}
         </div>
       </div>
-      {askOut && (
-        <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="ask-out-title">
-          <div className="dialog-card">
-            <h2 id="ask-out-title">¿Salida a almuerzo o salida de trabajo?</h2>
-            <p className="muted">El almuerzo no cuenta como tiempo trabajado. Al volver, marque Entrada.</p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="punch-btn shade"
-                onClick={() => {
-                  setAskOut(false);
-                  setEventType("BREAK_START");
-                  void punch("BREAK_START");
-                }}
-              >
-                Salida a almuerzo
-              </button>
-              <button
-                type="button"
-                className="punch-btn out shade"
-                onClick={() => {
-                  setAskOut(false);
-                  setEventType("OUT");
-                  void punch("OUT");
-                }}
-              >
-                Salida de trabajo
-              </button>
-            </div>
-            <button type="button" className="native-select shade" onClick={() => setAskOut(false)}>
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
       {result && (
         <div className={`result-overlay ${result.tone}`} role="alertdialog">
           {result.tone === "bad" ? (

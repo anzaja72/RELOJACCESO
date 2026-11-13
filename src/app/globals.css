@@ -363,7 +363,7 @@
   .rail-foot { display: none; }
   .canvas { margin: 0 8px 8px; }
   .split, .home-grid, .punch-row { grid-template-columns: 1fr; }
-  .punch-row { grid-auto-flow: row; }
+  .punch-row { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .split-list { border-right: 0; border-bottom: 1px solid var(--border-soft); }
 }
 
