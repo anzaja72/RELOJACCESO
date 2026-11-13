@@ -16,6 +16,7 @@ import {
   addDays,
   cellMinutes,
   coverageGaps,
+  hmToMin,
   isHm,
   mondayOf,
   totalsByEmployee,
@@ -1041,14 +1042,24 @@ function hoursFor(employee: Employee, weekStart: string, approvedCells: PlanCell
     limit: 5000,
     order: "asc",
   }).filter((p) => p.decision === "matched" || p.decision === "queued");
+  const mine = approvedCells.filter((c) => c.employeeId === employee.id);
+  // Un turno que cruza la medianoche (17:30–02:00) termina al día siguiente: las marcas de esa madrugada,
+  // hasta 4 h después de la salida programada, pertenecen al día en que empezó el turno.
+  const overnight = new Map(
+    mine
+      .filter((c) => c.kind === "turno" && c.startHm && c.endHm && hmToMin(c.endHm) <= hmToMin(c.startHm))
+      .map((c) => [c.date, hmToMin(c.endHm!)]),
+  );
   const byDate = new Map<string, Punch[]>();
   for (const p of punches) {
     const tz = sites.get(p.siteId)?.timezone ?? home?.timezone ?? "America/Bogota";
-    const date = localDateTime(p.capturedAt, tz).date;
+    const local = localDateTime(p.capturedAt, tz);
+    const before = addDays(local.date, -1);
+    const end = overnight.get(before);
+    const date = end != null && hmToMin(local.hm) <= end + 240 ? before : local.date;
     if (!dates.includes(date)) continue;
     byDate.set(date, [...(byDate.get(date) ?? []), p]);
   }
-  const mine = approvedCells.filter((c) => c.employeeId === employee.id);
   const hasPlan = mine.length > 0;
   const tz = home?.timezone ?? "America/Bogota";
   const days = dates.map((date) => {
@@ -1058,7 +1069,8 @@ function hoursFor(employee: Employee, weekStart: string, approvedCells: PlanCell
       date,
       plannedMin: hasPlan ? (cell ? cellMinutes(cell) : 0) : null,
       plannedKind: cell?.kind ?? null,
-      workday: dayPunches.length ? computeWorkday(dayPunches, tz, type?.lunchMin ?? 30) : null,
+      // El almuerzo se compara con el programado en ese turno; sin turno, con el de su jornada.
+      workday: dayPunches.length ? computeWorkday(dayPunches, tz, cell?.kind === "turno" && cell.lunchMin != null ? cell.lunchMin : (type?.lunchMin ?? 30)) : null,
     };
   });
   const workedMin = days.reduce((sum, d) => sum + (d.workday?.workedMin ?? 0), 0);

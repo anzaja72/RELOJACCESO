@@ -74,6 +74,10 @@ export function classifyEmployee(input: {
     if (inMin > start) {
       return { status: "late", lateMin: inMin - hmToMin(sched.startHm), lastPunch: last };
     }
+    // Un turno que cruza la medianoche (20:00–04:00) sale al día siguiente: la salida no está en este día.
+    if (hmToMin(sched.endHm) <= hmToMin(sched.startHm)) {
+      return { status: "present", lateMin: 0, lastPunch: last };
+    }
     if (out) {
       const outMin = hmToMin(localParts(out.capturedAt, tz).hm);
       if (outMin < hmToMin(sched.endHm) - 30) {

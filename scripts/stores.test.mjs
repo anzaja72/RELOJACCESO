@@ -230,4 +230,38 @@ for (const type of ["novelty.decided", "employee.hr_updated", "plan.decided", "m
   assert.ok(payload.siteId, `${type} debe incluir siteId`);
   assert.ok(payload.by, `${type} debe incluir quién`);
 }
+// ── Tardanzas y almuerzo se miden contra el cronograma APROBADO, también en turnos que cruzan la medianoche.
+{
+  const { reportForDay } = await import("@/lib/db-ops");
+  const W2 = "2026-11-30";
+  const planAP = S.openPlan("site_baq_ap", W2, gerenteAP);
+  S.savePlanCells(
+    planAP.id,
+    [
+      { employeeId: "emp_ap_bk", date: "2026-11-30", kind: "turno", startHm: "17:30", endHm: "02:00", lunchMin: 45 },
+      { employeeId: "emp_ap_bk", date: "2026-12-01", kind: "descanso" },
+    ],
+    gerenteAP,
+  );
+  S.submitPlan(planAP.id, gerenteAP);
+  S.decidePlan(planAP.id, "aprobado", "OK", ivan);
+  punch("emp_ap_bk", "site_baq_ap", "IN", "2026-11-30", "17:52");
+  punch("emp_ap_bk", "site_baq_ap", "BREAK_START", "2026-11-30", "21:00");
+  punch("emp_ap_bk", "site_baq_ap", "BREAK_END", "2026-11-30", "22:00");
+  punch("emp_ap_bk", "site_baq_ap", "OUT", "2026-12-01", "02:05");
+
+  const lunes = reportForDay({ day: "2026-11-30", siteId: "site_baq_ap", employeeId: "emp_ap_bk" }).rows[0];
+  assert.equal(lunes.status, "late", "entró 22 min después de las 17:30 del cronograma (no de su horario fijo)");
+  assert.equal(lunes.lateMin, 22);
+  const martes = reportForDay({ day: "2026-12-01", siteId: "site_baq_ap", employeeId: "emp_ap_bk" }).rows;
+  assert.equal(martes.length, 0, "día de descanso en el cronograma: no es ausencia");
+
+  const semana = S.weeklyHours(hr, { weekStart: W2, employeeId: "emp_ap_bk" })[0];
+  const d0 = semana.days[0].workday;
+  assert.equal(d0.workedMin, 188 + 245, "la salida de las 02:05 cuenta en el turno del lunes");
+  assert.equal(d0.lunchMin, 60);
+  assert.equal(d0.lunchDiffMin, 15, "almuerzo de 60 min contra 45 programados");
+  assert.equal(semana.days[1].workday, null, "el martes (descanso) no recibe la marca de madrugada");
+}
+
 console.log("stores.test.mjs ok");

@@ -545,10 +545,27 @@ export function reportForDay(input: {
   const exceptions = listExceptions() as Array<Record<string, unknown>>;
   const weekday = new Date(localNoon(day)).getDay();
   const withSchedule = new Set(schedules.map((s) => String(s.employee_id)));
+  // El cronograma APROBADO de la semana manda: su turno de ese día es la hora esperada de entrada.
+  // Sin cronograma aprobado se usa el horario fijo semanal (tabla schedules), como antes.
+  const planned = new Map(
+    (getDb()
+      .prepare(
+        `SELECT c.employee_id, c.kind, c.start_hm, c.end_hm FROM shift_cells c
+         JOIN shift_plans p ON p.id = c.plan_id WHERE p.status = 'aprobado' AND c.date = ?`,
+      )
+      .all(day) as Array<{ employee_id: string; kind: string; start_hm: string | null; end_hm: string | null }>).map((c) => [c.employee_id, c]),
+  );
   const rows = employees.flatMap((employee) => {
-    const schedRow = schedules.find(
+    const fixed = schedules.find(
       (s) => String(s.employee_id) === employee.id && Number(s.weekday) === weekday,
     );
+    const cell = planned.get(employee.id);
+    const schedRow =
+      cell?.kind === "turno" && cell.start_hm && cell.end_hm
+        ? { start_hm: cell.start_hm, end_hm: cell.end_hm, late_grace_min: fixed?.late_grace_min ?? 10, weekday }
+        : cell
+          ? undefined
+          : fixed;
     const exRow = exceptions.find(
       (x) => String(x.employee_id) === employee.id && String(x.date) === day,
     );
@@ -562,7 +579,7 @@ export function reportForDay(input: {
       now: localNoon(day),
     });
     // Un día en que la persona no tiene turno (y no marcó) no es una ausencia: no se esperaba.
-    if (classified.status === "absent" && !schedRow && !exRow && withSchedule.has(employee.id)) return [];
+    if (classified.status === "absent" && !schedRow && !exRow && (withSchedule.has(employee.id) || cell)) return [];
     return [
       {
         day,
