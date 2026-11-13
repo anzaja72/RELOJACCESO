@@ -30,6 +30,25 @@ Después de cargar, cada empleado aparece en *Personas* con su tipo de jornada y
 - Cargar a una persona **no** enrola su rostro ni da su consentimiento: el consentimiento biométrico se registra al enrolar en *Enrolar*.
 - No carga **salarios**: se fijan por separado (Personas, con RR. HH.).
 
+## Limpiar los datos de demostración (dejar solo las tiendas reales)
+
+Una instalación trae tiendas y empleados **de ejemplo** (R01 y R02), y el script `seed:dummy` agrega más (R03 a R05, unos 100 empleados y miles de marcaciones falsas). Para dejar solo lo real, la app incluye una limpieza que **borra todas las tiendas que no indique**, con sus empleados, marcaciones, cronogramas y demás datos dependientes.
+
+```bash
+# vista previa: muestra qué se borraría y qué se conserva; no borra nada
+node scripts/limpiar-demo.mjs --usuario admin@reloj.cr --conservar AP,BV
+# borrar: agrega --aplicar; pide escribir BORRAR
+node scripts/limpiar-demo.mjs --usuario admin@reloj.cr --conservar AP,BV --aplicar
+```
+
+Garantías:
+- **Respaldo previo** automático (`/data/backups/pre-limpieza-….db`).
+- **Nunca borra a una persona con cédula real**: quien tenga cédula distinta de `DEMO-…` en una tienda a borrar detiene la limpieza (primero hay que moverla con `importar-empleados --mover`).
+- La **auditoría no se borra**: queda un evento sellado «Datos de demostración eliminados» y el control de integridad lo reconoce (la pantalla de Auditoría sigue en verde). Los usuarios, las regiones y los ajustes tampoco se tocan; si un usuario queda apuntando a una tienda borrada, la vista previa lo avisa.
+- Solo el **superadmin con sesión** (no la clave de integración) puede ejecutarla, y exige confirmación explícita.
+
+Requiere la versión de la app que incluye la ruta `/api/v1/purge` (se despliega con el procedimiento normal).
+
 ## Cargar el cronograma semanal
 
 [`scripts/importar-cronograma.mjs`](../scripts/importar-cronograma.mjs) sube los turnos de una semana a una tienda **como borrador**; no lo envía ni lo aprueba (salvo `--enviar`). Primero deben estar cargados los empleados (se identifican por **cédula**).

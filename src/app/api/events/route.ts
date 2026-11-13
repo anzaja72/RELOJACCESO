@@ -53,6 +53,7 @@ const LABEL: Record<string, string> = {
   "hours.excess": "Exceso de horas detectado",
   "punch.unauthorized_store": "Marcación en tienda no autorizada",
   "site.hours_updated": "Horario de tienda cambiado",
+  "data.purged": "Datos de demostración eliminados",
 };
 
 const text = (v: unknown) => (typeof v === "string" && v ? v : null);

@@ -996,8 +996,18 @@ export function integrityReport() {
     if (diffs.length) mismatches.push({ id: r.id, problem: "modified", detail: `Difiere: ${diffs.join(", ")}` });
   }
   // La retención borra marcas viejas a propósito: solo cuenta como faltante lo posterior al corte.
+  // Igual la limpieza de datos de demostración: su evento sellado `data.purged` dice qué se borró adrede.
+  const purgedEmployees = new Set<string>();
+  const purgedPunches = new Set<string>();
+  for (const e of events) {
+    if (e.type !== "data.purged") continue;
+    const p = JSON.parse(e.payload) as { employeeIds?: string[]; otherPunchIds?: string[] };
+    for (const id of p.employeeIds ?? []) purgedEmployees.add(id);
+    for (const id of p.otherPunchIds ?? []) purgedPunches.add(id);
+  }
   const cutoff = new Date(Date.now() - retentionDays() * 86_400_000).toISOString();
   for (const [id, exp] of expected) {
+    if (purgedPunches.has(id) || (exp.employeeId && purgedEmployees.has(exp.employeeId))) continue;
     if (!seen.has(id) && exp.capturedAt >= cutoff) {
       mismatches.push({ id, problem: "missing", detail: "La marca existe en el registro sellado pero ya no está en la base" });
     }
