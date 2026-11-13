@@ -28,8 +28,10 @@ export function hmToMin(hm: string) {
 }
 
 export function minToHm(min: number) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
+  // Pasada la medianoche (cierre de madrugada) se muestra la hora del reloj: 26:00 → 02:00.
+  const day = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(day / 60);
+  const m = day % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
@@ -108,7 +110,9 @@ export function coverageGaps(input: {
   leadIds: Set<string>;
 }): CoverageGap[] {
   const open = hmToMin(input.opensHm);
-  const close = hmToMin(input.closesHm) || 24 * 60;
+  // Un cierre igual o menor que la apertura es de madrugada del día siguiente (08:00–04:00, 00:00 = medianoche).
+  let close = hmToMin(input.closesHm);
+  if (close <= open) close += 24 * 60;
   const gaps: CoverageGap[] = [];
   for (const date of input.dates) {
     const spans = input.cells

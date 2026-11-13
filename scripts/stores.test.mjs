@@ -218,7 +218,7 @@ assert.equal(hrEvent.after.employeeTypeId, "et_tc");
 
 // RF-06: el horario de apertura lo fija el regional y la cobertura lo usa.
 forbidden(() => S.setSiteHours("site_baq_bv", "08:00", "20:00", gerenteBV));
-assert.throws(() => S.setSiteHours("site_baq_bv", "20:00", "08:00", ivan), /posterior/);
+assert.throws(() => S.setSiteHours("site_baq_bv", "08:00", "08:00", ivan), /iguales/);
 S.setSiteHours("site_baq_bv", "08:00", "20:00", ivan);
 const hoursView = S.getPlanView("site_baq_bv", WEEK, gerenteBV, { planId: plan.id });
 assert.equal(hoursView.hoursConfirmed, true);

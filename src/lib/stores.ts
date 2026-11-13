@@ -1219,7 +1219,8 @@ export function setSiteHours(siteId: string, opensHm: string, closesHm: string, 
   requirePerm(actor, "access.manage");
   const site = assertSiteScope(actor, siteId);
   if (!isHm(opensHm) || !isHm(closesHm)) throw new DomainError("Apertura y cierre en formato HH:MM");
-  if (closesHm !== "00:00" && closesHm <= opensHm) throw new DomainError("El cierre debe ser posterior a la apertura");
+  // Un cierre menor que la apertura es de madrugada del día siguiente (tiendas que cierran después de medianoche).
+  if (closesHm === opensHm) throw new DomainError("La apertura y el cierre no pueden ser iguales");
   getDb().prepare("UPDATE sites SET opens_hm = ?, closes_hm = ? WHERE id = ?").run(opensHm, closesHm, site.id);
   audit("site.hours_updated", actor, { siteId: site.id, before: { opensHm: site.opensHm, closesHm: site.closesHm }, after: { opensHm, closesHm } });
   return siteOrThrow(site.id);

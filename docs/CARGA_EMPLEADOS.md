@@ -30,6 +30,33 @@ Después de cargar, cada empleado aparece en *Personas* con su tipo de jornada y
 - Cargar a una persona **no** enrola su rostro ni da su consentimiento: el consentimiento biométrico se registra al enrolar en *Enrolar*.
 - No carga **salarios**: se fijan por separado (Personas, con RR. HH.).
 
+## Cargar el cronograma semanal
+
+[`scripts/importar-cronograma.mjs`](../scripts/importar-cronograma.mjs) sube los turnos de una semana a una tienda **como borrador**; no lo envía ni lo aprueba (salvo `--enviar`). Primero deben estar cargados los empleados (se identifican por **cédula**).
+
+CSV (UTF-8, con encabezado): `cedula,nombre,lunes,martes,miercoles,jueves,viernes,sabado,domingo,almuerzo_min`. Cada día es `HH:MM-HH:MM` (salida menor que entrada = cruza medianoche), `DESCANSO` o vacío (no toca). `almuerzo_min` (por defecto 30) no cuenta como trabajado.
+
+```bash
+node scripts/importar-cronograma.mjs --usuario <usuario> --archivo cronograma.csv --tienda AP-31760 --semana 2026-11-16            # simulación: horas netas por persona
+node scripts/importar-cronograma.mjs --usuario <usuario> --archivo cronograma.csv --tienda AP-31760 --semana 2026-11-16 --aplicar  # borrador
+```
+Repetirlo con `--aplicar` **actualiza el mismo borrador**. Si ya hay uno enviado o aprobado, pide `--nueva-version "motivo"`. Tras cargarlo, la app informa las franjas sin gerente o coordinador y las advertencias de jornada. Lo ve y lo envía el gerente desde el *Planificador*.
+
+### Alto Prado: de la hoja de horarios a una propuesta
+El Excel de Alto Prado define **reglas**, no turnos: 6 días y 42 h semanales (5 días y 42 h para AMIGO BK; mínimo 21 h y días variables para medio tiempo), entradas desde las 8 am y salidas hasta las 4 am, tolerancia de llegada de 5 min, un descanso semanal y vacaciones por programar. Con esas reglas se generó una **propuesta de prueba editable** (`cronograma-propuesto-alto-prado.csv`, fuera del repositorio) usando solo horas permitidas por la hoja:
+
+| Turno | Horario | Quién |
+| --- | --- | --- |
+| Mañana | 08:00–16:00 | Gerente Junior y 2 empleados |
+| Intermedio | 12:00–20:00 | 2 empleados |
+| Tarde | 14:00–22:00 | Coordinadora 1, 2 empleados y el medio tiempo (vie–dom) |
+| Noche | 20:00–04:00 | Coordinadora 2 y 2 empleados |
+| AMIGO BK | 12:00–21:00, 5 días | 1 empleado |
+
+Supuestos **a confirmar** (están en columnas editables del CSV): almuerzo de 60 min en turnos de 8 h (así 6 días dan exactamente 42 h netas; con 30 min darían 45 h) y de 36 min en el turno de 9 h de AMIGO BK (5 días = 42 h). El documento de requerimientos dice 30 min: si es 30, hay que acortar turnos o aceptar el aviso de exceso.
+
+Resultado en la app con horario de tienda 08:00–04:00: 0 advertencias de jornada y **3 franjas sin responsable** (lun 16:00–20:00, mar 22:00–04:00, dom 08:00–14:00). No es un error de carga: con **un gerente y dos coordinadores** no se pueden cubrir 20 horas diarias los 7 días (hacen falta 21 turnos de responsable y hay 18).
+
 ## Qué no hace
-- No crea turnos ni cronogramas (los turnos concretos por persona y día se cargan en el *Planificador*).
-- No registra la tolerancia de llegada, los descansos ni las vacaciones: dependen de los horarios concretos.
+- No registra la tolerancia de llegada (5 min), las vacaciones ni los descansos más allá de lo escrito en el CSV.
+- No fija el horario de apertura de la tienda: se hace en el *Planificador* (un cierre menor que la apertura, como 08:00–04:00, se entiende de madrugada del día siguiente).

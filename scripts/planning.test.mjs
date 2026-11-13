@@ -60,4 +60,18 @@ assert.deepEqual(
 const resting = [{ employeeId: "gerente", date: day, kind: "descanso" }];
 assert.equal(coverageGaps({ dates: [day], opensHm: "07:00", closesHm: "22:00", cells: resting, leadIds: leads }).length, 1);
 
+// Tienda que cierra de madrugada (08:00–04:00): el turno de noche cubre hasta las 04:00 del día siguiente.
+{
+  const d = "2026-11-16";
+  const lead = new Set(["gj", "ct", "nn"]);
+  const turno = (employeeId, startHm, endHm) => ({ employeeId, date: d, kind: "turno", startHm, endHm, lunchMin: 60 });
+  const full = [turno("gj", "08:00", "16:00"), turno("ct", "14:00", "22:00"), turno("nn", "20:00", "04:00")];
+  assert.deepEqual(coverageGaps({ dates: [d], opensHm: "08:00", closesHm: "04:00", cells: full, leadIds: lead }), []);
+  // Sin el turno de noche quedan 22:00–04:00 sin responsable (la hora se muestra como reloj, no como 28:00).
+  assert.deepEqual(coverageGaps({ dates: [d], opensHm: "08:00", closesHm: "04:00", cells: full.slice(0, 2), leadIds: lead }), [{ date: d, fromHm: "22:00", toHm: "04:00" }]);
+  // Hueco intermedio y cierre a medianoche siguen funcionando como antes.
+  assert.deepEqual(coverageGaps({ dates: [d], opensHm: "08:00", closesHm: "04:00", cells: [full[0], full[2]], leadIds: lead }), [{ date: d, fromHm: "16:00", toHm: "20:00" }]);
+  assert.deepEqual(coverageGaps({ dates: [d], opensHm: "07:00", closesHm: "00:00", cells: [turno("gj", "07:00", "15:00")], leadIds: lead }), [{ date: d, fromHm: "15:00", toHm: "00:00" }]);
+}
+
 console.log("planning.test.mjs ok");
