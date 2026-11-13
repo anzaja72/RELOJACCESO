@@ -292,7 +292,7 @@
   font-size: 11px;
 }
 
-.punch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.punch-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin-top: 12px; }
 .punch-btn {
   min-height: 52px;
   border: 1px solid var(--border);
@@ -363,6 +363,7 @@
   .rail-foot { display: none; }
   .canvas { margin: 0 8px 8px; }
   .split, .home-grid, .punch-row { grid-template-columns: 1fr; }
+  .punch-row { grid-auto-flow: row; }
   .split-list { border-right: 0; border-bottom: 1px solid var(--border-soft); }
 }
 

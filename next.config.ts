@@ -21,12 +21,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
   allowedDevOrigins: devOrigins(),
   async redirects() {
-    // El enlace de las tablets es /kiosco; quien lo escriba con k o con mayúscula también llega.
-    return ["/kiosko", "/Kiosko", "/KIOSKO", "/Kiosco", "/KIOSCO"].map((source) => ({
-      source,
-      destination: "/kiosco",
-      permanent: false,
-    }));
+    // El enlace de las tablets es /kiosco; quien lo escriba con k (Kiosko, KIOSKO…) también llega.
+    // Las fuentes de redirects no distinguen mayúsculas: nunca agregue una variante de /kiosco
+    // (p. ej. /Kiosco), porque también atraparía /kiosco y lo redirigiría a sí mismo en bucle.
+    return [{ source: "/kiosko", destination: "/kiosco", permanent: false }];
   },
   async headers() {
     // El navegador debe revisar sw.js en cada carga para que las actualizaciones lleguen.

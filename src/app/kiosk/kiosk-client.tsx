@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ulid } from "ulidx";
-import { LogIn, LogOut, UserRoundX } from "lucide-react";
+import { LogIn, LogOut, UserRoundX, Utensils } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { OfflineBadge } from "@/components/offline-badge";
 import { WebcamPanel } from "@/components/webcam-panel";
@@ -504,6 +504,19 @@ export function KioskClient() {
               <LogIn className="size-4" />
               Entrada
             </button>
+            {eventTypes.includes("BREAK_END") && (
+              <button
+                className="punch-btn in shade"
+                disabled={busy || !modelsReady}
+                onClick={() => {
+                  setEventType("BREAK_END");
+                  void punch("BREAK_END");
+                }}
+              >
+                <Utensils className="size-4" />
+                Regreso de almuerzo
+              </button>
+            )}
             <button
               className="punch-btn out shade"
               disabled={busy || !modelsReady}
