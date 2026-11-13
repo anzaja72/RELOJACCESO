@@ -10,7 +10,9 @@ import {
   recordEvent,
   upsertPunch,
 } from "@/lib/db";
-import { insertAlert, siteIdsForScope } from "@/lib/db-ops";
+import { insertAlert, payrollCfg, siteIdsForScope } from "@/lib/db-ops";
+import { cappedIntervals, workedIntervals } from "@/lib/payroll";
+import { BUCKET_LABEL, BUCKETS, hoursToPay, LEGAL_DEFAULTS, type Bucket } from "@/lib/payroll-co";
 import { can, type Permission } from "@/lib/permissions";
 import {
   addDays,
@@ -1021,10 +1023,22 @@ export type HoursRow = {
   shortfallMin: number;
   restDays: number;
   incidents: number;
-  days: Array<{ date: string; plannedMin: number | null; plannedKind: CellKind | null; workday: Workday | null }>;
+  days: Array<{
+    date: string;
+    plannedMin: number | null;
+    plannedKind: CellKind | null;
+    plannedStartHm: string | null;
+    plannedEndHm: string | null;
+    plannedLunchMin: number | null;
+    /** Minutos tarde contra la entrada del turno aprobado (0 si llegó a tiempo o no hay turno). */
+    lateMin: number;
+    workday: Workday | null;
+  }>;
   excessNovelty: { id: string; status: NoveltyStatus } | null;
   pendingReview: boolean;
 };
+
+const LATE_GRACE_MIN = 10;
 
 function approvedCellsForWeek(weekStart: string) {
   const plans = getDb().prepare("SELECT id FROM shift_plans WHERE week_start = ? AND status = 'aprobado'").all(weekStart) as Array<{ id: string }>;
@@ -1065,12 +1079,24 @@ function hoursFor(employee: Employee, weekStart: string, approvedCells: PlanCell
   const days = dates.map((date) => {
     const cell = mine.find((c) => c.date === date) ?? null;
     const dayPunches = byDate.get(date) ?? [];
+    const workday = dayPunches.length ? computeWorkday(dayPunches, tz, cell?.kind === "turno" && cell.lunchMin != null ? cell.lunchMin : (type?.lunchMin ?? 30)) : null;
+    // Llegada tarde contra la entrada del turno aprobado (10 min de gracia, como el reporte diario).
+    let lateMin = 0;
+    if (cell?.kind === "turno" && cell.startHm && workday?.firstIn) {
+      let diff = hmToMin(workday.firstIn) - hmToMin(cell.startHm);
+      if (diff < -720) diff += 1440;
+      if (diff > LATE_GRACE_MIN) lateMin = diff;
+    }
     return {
       date,
       plannedMin: hasPlan ? (cell ? cellMinutes(cell) : 0) : null,
       plannedKind: cell?.kind ?? null,
+      plannedStartHm: cell?.kind === "turno" ? (cell.startHm ?? null) : null,
+      plannedEndHm: cell?.kind === "turno" ? (cell.endHm ?? null) : null,
+      plannedLunchMin: cell?.kind === "turno" ? (cell.lunchMin ?? null) : null,
+      lateMin,
       // El almuerzo se compara con el programado en ese turno; sin turno, con el de su jornada.
-      workday: dayPunches.length ? computeWorkday(dayPunches, tz, cell?.kind === "turno" && cell.lunchMin != null ? cell.lunchMin : (type?.lunchMin ?? 30)) : null,
+      workday,
     };
   });
   const workedMin = days.reduce((sum, d) => sum + (d.workday?.workedMin ?? 0), 0);
@@ -1129,6 +1155,117 @@ export function weeklyHours(
     .filter((e) => !filters.employeeId || e.id === filters.employeeId)
     .map((e) => hoursFor(e, weekStart, approved, sites, types, salaries?.get(e.id) ?? null))
     .filter((r) => !filters.review || (filters.review === "pendiente" ? r.pendingReview : !r.pendingReview));
+}
+
+/* ───────────── horas para nómina por período (sin valores) ───────────── */
+
+export type PayrollHoursRow = {
+  employeeId: string;
+  employeeName: string;
+  employeeCode: string;
+  documentId: string | null;
+  siteName: string;
+  typeName: string | null;
+  /** Horas por categoría legal (Colombia), clasificadas minuto a minuto contra el turno aprobado de cada día. */
+  hours: Record<Bucket, number>;
+  workedHours: number;
+  lateDays: number;
+  lateMin: number;
+  lunchOverDays: number;
+  lunchOverMin: number;
+  /** Días con turno aprobado y sin ninguna marca (por revisar: pueden tener justificación). */
+  absences: string[];
+  /** Días trabajados sin turno aprobado: sus horas cuentan como extra hasta que se apruebe el cronograma. */
+  workedWithoutPlan: string[];
+  /** Novedades programadas que tocan el período: días por tipo (vacaciones, incapacidad…). */
+  noveltyDays: Record<string, number>;
+  /** Estado de la autorización de horas adicionales de cada semana con exceso. */
+  excessWeeks: Array<{ weekStart: string; excessMin: number; status: string }>;
+  incidents: number;
+};
+
+/** Horas trabajadas de un período (máx. 31 días) por categoría de nómina, tardanzas, almuerzos, ausencias y novedades. Sin salarios ni valores. */
+export function payrollHours(
+  actor: StoreActor,
+  filters: { from: string; to: string; siteId?: string; zoneId?: string; employeeId?: string },
+): { from: string; to: string; labels: Record<Bucket, string>; rows: PayrollHoursRow[] } {
+  requirePerm(actor, "hours.view");
+  const from = assertDate(filters.from, "Desde");
+  const to = assertDate(filters.to, "Hasta");
+  if (to < from) throw new DomainError("«Hasta» no puede ser anterior a «Desde»");
+  const dates: string[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d);
+  if (dates.length > 31) throw new DomainError("El período no puede pasar de 31 días");
+  if (filters.siteId) assertSiteScope(actor, filters.siteId);
+  const allowed = allowedSiteIds(actor);
+  const sites = new Map(listSites().map((s) => [s.id, s]));
+  const types = typesById();
+  const weeks = [...new Set(dates.map((d) => mondayOf(d)))];
+  const approvedByWeek = new Map(weeks.map((w) => [w, approvedCellsForWeek(w)]));
+  const approved = [...approvedByWeek.values()].flat();
+  const months = [...new Set(dates.map((d) => d.slice(0, 7)))];
+  const params = { ...LEGAL_DEFAULTS, extraHolidays: payrollCfg().holidays, offsetMin: -300 };
+  const inRange = (d: string) => d >= from && d <= to;
+
+  const employees = listEmployees()
+    .filter((e) => allowed === null || allowed.includes(e.siteId))
+    .filter((e) => !filters.siteId || e.siteId === siteOrThrow(filters.siteId).id)
+    .filter((e) => !filters.zoneId || sites.get(e.siteId)?.zoneId === filters.zoneId)
+    .filter((e) => !filters.employeeId || e.id === filters.employeeId);
+
+  const rows = employees.map((e): PayrollHoursRow => {
+    const type = e.employeeTypeId ? types.get(e.employeeTypeId) : undefined;
+    const cells = new Map(approved.filter((c) => c.employeeId === e.id).map((c) => [c.date, c]));
+    const scheduleFor = (day: string) => {
+      const c = cells.get(day);
+      return c?.kind === "turno" && c.startHm && c.endHm ? { startMin: hmToMin(c.startHm), endMin: hmToMin(c.endHm), breakMin: c.lunchMin ?? 0 } : null;
+    };
+    const punches = listPunches({ employeeId: e.id, from: `${addDays(from, -1)}T00:00:00Z`, to: `${addDays(to, 2)}T12:00:00Z`, limit: 10000, order: "asc" }).filter(
+      (p) => p.decision === "matched" || p.decision === "queued",
+    );
+    const intervals = cappedIntervals(workedIntervals(punches), scheduleFor).filter((iv) => inRange(localDateTime(iv.from, "America/Bogota").date));
+    const hours = Object.fromEntries(BUCKETS.map((b) => [b, 0])) as Record<Bucket, number>;
+    const workedDays = new Set<string>();
+    for (const month of months) {
+      const pay = hoursToPay(
+        { month, intervals, plannedMinFor: (day) => (cells.get(day)?.kind === "turno" ? cellMinutes(cells.get(day)!) : 0), monthlySalary: 0, weeklyHours: 0 },
+        params,
+      );
+      for (const b of BUCKETS) hours[b] = Math.round((hours[b] + pay.hours[b]) * 100) / 100;
+      for (const [day, min] of Object.entries(pay.minutesByDay)) if (min > 0) workedDays.add(day);
+    }
+    const weekly = weeks.map((w) => hoursFor(e, w, approvedByWeek.get(w)!, sites, types));
+    const days = weekly.flatMap((r) => r.days).filter((d) => inRange(d.date));
+    const novelties = (getDb()
+      .prepare("SELECT type, start_date, end_date FROM novelties WHERE employee_id = ? AND kind = 'programada' AND status NOT IN ('rechazada', 'anulada') AND start_date <= ? AND end_date >= ?")
+      .all(e.id, to, from) as Array<{ type: string; start_date: string; end_date: string }>);
+    const noveltyDays: Record<string, number> = {};
+    const covered = new Set<string>();
+    for (const n of novelties) for (const d of dates) if (d >= n.start_date && d <= n.end_date) { noveltyDays[n.type] = (noveltyDays[n.type] ?? 0) + 1; covered.add(d); }
+    const absences = dates.filter((d) => cells.get(d)?.kind === "turno" && !workedDays.has(d) && !covered.has(d) && !days.find((x) => x.date === d)?.workday);
+    const late = days.filter((d) => d.lateMin > 0);
+    const lunchOver = days.filter((d) => (d.workday?.lunchDiffMin ?? 0) > 0);
+    return {
+      employeeId: e.id,
+      employeeName: e.name,
+      employeeCode: e.code,
+      documentId: e.documentId ?? null,
+      siteName: sites.get(e.siteId)?.name ?? e.siteId,
+      typeName: type?.name ?? null,
+      hours,
+      workedHours: Math.round(BUCKETS.reduce((s, b) => s + hours[b], 0) * 100) / 100,
+      lateDays: late.length,
+      lateMin: late.reduce((s, d) => s + d.lateMin, 0),
+      lunchOverDays: lunchOver.length,
+      lunchOverMin: lunchOver.reduce((s, d) => s + (d.workday?.lunchDiffMin ?? 0), 0),
+      absences,
+      workedWithoutPlan: [...workedDays].filter((d) => inRange(d) && cells.get(d)?.kind !== "turno").sort(),
+      noveltyDays,
+      excessWeeks: weekly.filter((r) => r.excessMin > 0).map((r) => ({ weekStart: r.days[0].date, excessMin: r.excessMin, status: r.excessNovelty?.status ?? "sin enviar a revisión" })),
+      incidents: days.reduce((s, d) => s + (d.workday?.incidents.length ?? 0), 0),
+    };
+  });
+  return { from, to, labels: BUCKET_LABEL, rows };
 }
 
 /** RF-13/RF-14: un exceso sobre la jornada de referencia se envía a revisión; nunca se liquida solo. */

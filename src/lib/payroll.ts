@@ -102,7 +102,7 @@ export function workedIntervals(punches: Punch[]): Array<{ from: string; to: str
 }
 
 /** Cierra intervalos abiertos (sin OUT): hasta el fin de jornada programado; si no hay jornada, hasta el fin del día local. */
-function cappedIntervals(
+export function cappedIntervals(
   intervals: Array<{ from: string; to: string | null }>,
   scheduleFor: (day: string) => DaySchedule | null,
 ): Array<{ from: string; to: string }> {

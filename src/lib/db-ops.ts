@@ -621,7 +621,7 @@ export function reportForDay(input: {
   };
 }
 
-function payrollCfg(): PayCfg {
+export function payrollCfg(): PayCfg {
   const num = (k: string, d: number) => {
     const n = Number(getSetting(k));
     return Number.isFinite(n) && n > 0 ? n : d;

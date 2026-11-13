@@ -149,11 +149,16 @@ const compactHours = (r, detail) => ({
         dias: r.days.map((d) => ({
           fecha: d.date,
           programado: d.plannedKind === "descanso" ? "descanso" : d.plannedMin == null ? null : fmtMin(d.plannedMin),
+          turno: d.plannedStartHm ? `${d.plannedStartHm}-${d.plannedEndHm}` : undefined,
+          almuerzo_programado_min: d.plannedLunchMin ?? undefined,
           entrada: d.workday?.firstIn ?? null,
           sale_almuerzo: d.workday?.lunchOut ?? null,
           regresa: d.workday?.lunchIn ?? null,
           salida: d.workday?.lastOut ?? null,
           neto: d.workday?.workedMin != null ? fmtMin(d.workday.workedMin) : null,
+          llegada_tarde_min: d.lateMin || undefined,
+          almuerzo_tomado_min: d.workday?.lunchMin ?? undefined,
+          almuerzo_excedido_min: d.workday?.lunchDiffMin > 0 ? d.workday.lunchDiffMin : undefined,
           incidencias: d.workday?.incidents ?? [],
         })),
       }
@@ -346,6 +351,43 @@ export function registerTools(server, { reloj, identity }) {
     async ({ semana: s, sede, zona, empleado, revision, detalle_por_dia }) => {
       const data = await reloj.get("hours", { week: mondayOf(s || todayLocal()), site: sede, zone: zona, employee: empleado, review: revision });
       return { semana: data.weekStart, corte: data.cutAt, empleados: data.rows.map((r) => compactHours(r, detalle_por_dia)) };
+    },
+    { needs: ["hours.view"] },
+  );
+  tool(
+    "horas_nomina",
+    "Corte de nómina de un período (quincena o mes, máx. 31 días): por empleado, horas por categoría legal colombiana (ordinarias diurnas, recargo nocturno, dominical/festivo, extras diurnas/nocturnas/festivas) contra el cronograma aprobado, tardanzas, almuerzos excedidos, ausencias por revisar, días trabajados sin turno aprobado, novedades y estado de autorización de las horas adicionales. Sin salarios ni valores.",
+    {
+      desde: date,
+      hasta: date,
+      sede: z.string().optional().describe("Id o código de tienda"),
+      zona: z.string().optional().describe("Id de región"),
+      empleado: z.string().optional().describe("Id de empleado"),
+    },
+    async ({ desde, hasta, sede, zona, empleado }) => {
+      const data = await reloj.get("payroll-hours", { from: desde, to: hasta, site: sede, zone: zona, employee: empleado });
+      const h = (n) => Math.round(n * 100) / 100;
+      return {
+        periodo: { desde: data.from, hasta: data.to },
+        categorias: data.labels,
+        empleados: data.rows.map((r) => ({
+          empleado_id: r.employeeId,
+          codigo: r.employeeCode,
+          empleado: r.employeeName,
+          cedula: r.documentId,
+          tienda: r.siteName,
+          tipo_jornada: r.typeName,
+          horas_trabajadas: h(r.workedHours),
+          horas: Object.fromEntries(Object.entries(r.hours).filter(([, v]) => v > 0).map(([k, v]) => [k, h(v)])),
+          tardanzas: r.lateDays ? { dias: r.lateDays, minutos: r.lateMin } : undefined,
+          almuerzo_excedido: r.lunchOverDays ? { dias: r.lunchOverDays, minutos: r.lunchOverMin } : undefined,
+          ausencias_por_revisar: r.absences.length ? r.absences : undefined,
+          trabajo_sin_turno_aprobado: r.workedWithoutPlan.length ? r.workedWithoutPlan : undefined,
+          novedades_dias: Object.keys(r.noveltyDays).length ? r.noveltyDays : undefined,
+          horas_adicionales: r.excessWeeks.length ? r.excessWeeks.map((w) => ({ semana: w.weekStart, exceso: fmtMin(w.excessMin), estado: w.status })) : undefined,
+          incidencias_de_marcacion: r.incidents || undefined,
+        })),
+      };
     },
     { needs: ["hours.view"] },
   );
@@ -569,6 +611,42 @@ export function registerTools(server, { reloj, identity }) {
       return { ok: true, tienda: data.site.name, apertura: data.site.opensHm, cierre: data.site.closesHm };
     },
     { write: true, needs: ["access.manage"] },
+  );
+  tool(
+    "crear_empleado",
+    "Da de alta un empleado en una tienda con su ficha laboral (cédula, cargo y tipo de jornada). Solo RR. HH. No maneja salarios. Después hay que enrolar su rostro en la tienda.",
+    {
+      nombre: z.string().min(3).max(120),
+      codigo: z.string().regex(/^[A-Za-z0-9_-]{2,20}$/).describe("Código interno único, p. ej. AP-14"),
+      sede: sedeRef,
+      cargo: z.string().min(2).max(80),
+      cedula: z.string().regex(/^\d{5,12}$/).describe("Solo números"),
+      tipo_jornada: z.string().describe("Id o nombre del tipo de jornada (ver tipos_jornada)"),
+      confirmado: confirmed,
+    },
+    async ({ nombre, codigo, sede, cargo, cedula, tipo_jornada }) => {
+      const site = await resolveSite(sede);
+      const { types } = await reloj.get("employee-types");
+      const t = String(tipo_jornada).trim().toLowerCase();
+      const type = types.find((x) => x.id.toLowerCase() === t) ?? types.find((x) => x.name.toLowerCase() === t);
+      if (!type) throw new Error(`No existe el tipo de jornada «${tipo_jornada}». Tipos: ${types.map((x) => x.name).join(", ")}.`);
+      const data = await reloj.post("employees", { name: nombre, code: codigo.toUpperCase(), siteId: site.id, role: cargo, documentId: cedula, employeeTypeId: type.id, employmentStatus: "activo" });
+      const e = data.employee ?? data;
+      return { ok: true, id: e.id, codigo: e.code, nombre: e.name, tienda: site.name, tipo_jornada: type.name, enrolado: false };
+    },
+    { write: true, needs: ["employee.manage"] },
+  );
+  tool(
+    "trasladar_empleado",
+    "Cambia la tienda BASE de un empleado (traslado definitivo). Para unos días en otra tienda use autorizar_movilidad. Solo RR. HH.",
+    { empleado: empRef, sede_destino: sedeRef, confirmado: confirmed },
+    async ({ empleado, sede_destino }) => {
+      const [emp, site] = await Promise.all([resolveEmployee(empleado), resolveSite(sede_destino)]);
+      const data = await reloj.patch(`employees/${encodeURIComponent(emp.id)}`, { siteId: site.id });
+      const e = data.employee ?? data;
+      return { ok: true, empleado: e.name, tienda_base: site.name };
+    },
+    { write: true, needs: ["employee.manage"] },
   );
   tool(
     "actualizar_ficha_laboral",

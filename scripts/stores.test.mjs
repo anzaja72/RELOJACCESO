@@ -262,6 +262,20 @@ for (const type of ["novelty.decided", "employee.hr_updated", "plan.decided", "m
   assert.equal(d0.lunchMin, 60);
   assert.equal(d0.lunchDiffMin, 15, "almuerzo de 60 min contra 45 programados");
   assert.equal(semana.days[1].workday, null, "el martes (descanso) no recibe la marca de madrugada");
+  assert.equal(semana.days[0].lateMin, 22, "el detalle diario trae la tardanza contra el turno aprobado");
+  assert.equal(semana.days[0].plannedStartHm, "17:30");
+
+  // Corte de nómina del período: horas por categoría contra el turno aprobado (nocturna desde las 19:00, Ley 2466).
+  const corte = S.payrollHours(hr, { from: "2026-11-30", to: "2026-12-06", employeeId: "emp_ap_bk" }).rows[0];
+  assert.equal(corte.hours.ord_dia, 1.13, "17:52–19:00");
+  assert.equal(corte.hours.ord_noche, 6.08, "19:00–21:00 y 22:00–02:05");
+  assert.equal(corte.hours.ext_dia + corte.hours.ext_noche, 0, "no pasó de su turno: sin extras");
+  assert.equal(corte.workedHours, 7.21);
+  assert.deepEqual([corte.lateDays, corte.lateMin, corte.lunchOverDays, corte.lunchOverMin], [1, 22, 1, 15]);
+  assert.deepEqual(corte.absences, []);
+  assert.deepEqual(corte.workedWithoutPlan, []);
+  assert.throws(() => S.payrollHours(hr, { from: "2026-11-01", to: "2026-12-15" }), /31 días/);
+  forbidden(() => S.payrollHours(actor("op", "operator", "site", "site_baq_ap"), { from: "2026-11-30", to: "2026-12-06" }));
 }
 
 console.log("stores.test.mjs ok");
