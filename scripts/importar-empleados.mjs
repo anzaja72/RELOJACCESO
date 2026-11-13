@@ -134,9 +134,17 @@ async function main() {
   // Tienda
   const sites = (await call("GET", "sites", token)).data.sites ?? [];
   const wanted = tienda.toLowerCase();
-  let site = sites.find((s) => s.id.toLowerCase() === wanted || s.code.toLowerCase() === wanted);
+  // Por id, por código o por parte del nombre (si es única): --tienda "Alto Prado"
+  const byName = sites.filter((s) => s.name.toLowerCase().includes(wanted));
+  let site = sites.find((s) => s.id.toLowerCase() === wanted || s.code.toLowerCase() === wanted) ?? (byName.length === 1 ? byName[0] : undefined);
+  if (!site && byName.length > 1) fail(`«${tienda}» coincide con varias tiendas: ${byName.map((s) => `${s.name} (${s.code})`).join("; ")}. Use el código.`);
   if (!site) {
-    if (!flag("crear-tienda")) fail(`La tienda «${tienda}» no existe (o no es visible para este usuario). Use --crear-tienda con --nombre-tienda, --ciudad y --region.`);
+    if (!flag("crear-tienda")) {
+      console.error(`✗ No encontré la tienda «${tienda}». Tiendas que este usuario puede ver:`);
+      sites.forEach((s) => console.error(`    ${s.code.padEnd(10)} ${s.name} · ${s.city} · id ${s.id}`));
+      console.error("  Use el código de una de ellas, o --crear-tienda con --nombre-tienda, --ciudad y --region.");
+      process.exit(1);
+    }
     if (role !== "superadmin") fail("Solo el superadmin puede crear tiendas.");
     const nombreTienda = arg("nombre-tienda");
     const ciudad = arg("ciudad");
