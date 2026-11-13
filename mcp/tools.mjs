@@ -62,7 +62,8 @@ const semana = z.string().regex(DATE).optional().describe("Cualquier fecha de la
 function cellText(c) {
   if (c.kind === "descanso") return "descanso";
   if (c.kind === "novedad") return `novedad${c.note ? ` (${c.note})` : ""}`;
-  return `${c.startHm}-${c.endHm}${c.lunchMin ? ` · almuerzo ${c.lunchMin} min` : ""}`;
+  // La nota viaja con el turno: así un turno partido («partido 12:30-14:00 / 15:30-21:00») se reconoce al volver a leerlo.
+  return `${c.startHm}-${c.endHm}${c.lunchMin ? ` · almuerzo ${c.lunchMin} min` : ""}${c.note ? ` · ${c.note}` : ""}`;
 }
 
 /** Vista compacta de un cronograma (la respuesta completa de la API es demasiado grande para un modelo). */

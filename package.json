@@ -9,7 +9,7 @@
     "lint": "eslint",
     "models": "node scripts/ensure-models.mjs",
     "predev": "node scripts/ensure-models.mjs",
-    "test": "node scripts/match.test.mjs && node scripts/queue.test.mjs && node scripts/attendance.test.mjs && node scripts/labor.test.mjs && node --experimental-strip-types --no-warnings scripts/payroll.test.mjs && node --experimental-strip-types --no-warnings scripts/co-holidays.test.mjs && node --experimental-strip-types --no-warnings scripts/payroll-co.test.mjs && node --experimental-strip-types --no-warnings scripts/ai-widgets.test.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/register-ts.mjs --test scripts/workday.test.mjs scripts/planning.test.mjs scripts/stores.test.mjs scripts/importar-empleados.test.mjs scripts/importar-cronograma.test.mjs scripts/purge.test.mjs",
+    "test": "node scripts/match.test.mjs && node scripts/queue.test.mjs && node scripts/attendance.test.mjs && node scripts/labor.test.mjs && node --experimental-strip-types --no-warnings scripts/payroll.test.mjs && node --experimental-strip-types --no-warnings scripts/co-holidays.test.mjs && node --experimental-strip-types --no-warnings scripts/payroll-co.test.mjs && node --experimental-strip-types --no-warnings scripts/ai-widgets.test.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/register-ts.mjs --test scripts/workday.test.mjs scripts/planning.test.mjs scripts/stores.test.mjs scripts/importar-empleados.test.mjs scripts/importar-cronograma.test.mjs scripts/purge.test.mjs && node skills/cronograma-tienda/scripts/validar.test.mjs",
     "smoke": "node scripts/rfp-smoke.mjs && node scripts/ai-smoke.mjs",
     "smoke:roles": "node scripts/roles-smoke.mjs",
     "backup": "node scripts/backup.mjs",

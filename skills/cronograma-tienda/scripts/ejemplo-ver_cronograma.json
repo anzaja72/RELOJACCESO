@@ -1,0 +1,21 @@
+{
+  "tienda": "Tienda Ejemplo (TE, Barranquilla)",
+  "tienda_id": "site_te",
+  "semana": { "inicia": "2026-11-09", "dias": ["2026-11-09","2026-11-10","2026-11-11","2026-11-12","2026-11-13","2026-11-14","2026-11-15"] },
+  "horario_tienda": { "apertura": "08:00", "cierre": "04:00", "confirmado": true },
+  "cronograma": { "estado": "borrador", "version": 1 },
+  "empleados": [
+    { "id": "e1", "codigo": "TE-01", "nombre": "LAURA PEREZ", "cargo": "Gerente", "tipo_jornada": "Gerente", "responsable_de_turno": true, "jornada_referencia_h": 42, "horas_programadas": "42:30",
+      "turnos": { "2026-11-09": "17:30-02:00 · almuerzo 30 min", "2026-11-10": "descanso", "2026-11-11": "13:30-20:30 · almuerzo 30 min", "2026-11-12": "08:00-17:30 · almuerzo 30 min", "2026-11-13": "11:00-19:30 · almuerzo 30 min", "2026-11-14": "16:30-20:30 · almuerzo 30 min", "2026-11-15": "09:30-17:30 · almuerzo 30 min" } },
+    { "id": "e2", "codigo": "TE-02", "nombre": "ANA GOMEZ", "cargo": "Coordinadora", "tipo_jornada": "Coordinador", "responsable_de_turno": true, "jornada_referencia_h": 42, "horas_programadas": "0:00", "turnos": {} },
+    { "id": "e3", "codigo": "TE-03", "nombre": "CAMILO RUIZ", "cargo": "Empleado TC", "tipo_jornada": "Tiempo completo", "responsable_de_turno": false, "jornada_referencia_h": 42, "horas_programadas": "43:30",
+      "turnos": { "2026-11-09": "17:30-02:00 · almuerzo 30 min", "2026-11-10": "17:30-02:00 · almuerzo 30 min", "2026-11-11": "17:30-02:00 · almuerzo 30 min", "2026-11-12": "descanso", "2026-11-13": "11:30-20:00 · almuerzo 30 min", "2026-11-14": "12:30-21:00 · almuerzo 90 min · partido 12:30-14:00 / 15:30-21:00", "2026-11-15": "09:30-14:30 · almuerzo 30 min" } },
+    { "id": "e4", "codigo": "TE-04", "nombre": "PEDRO DIAZ", "cargo": "Empleado MT", "tipo_jornada": "Medio tiempo", "responsable_de_turno": false, "jornada_referencia_h": "mínimo 20", "horas_programadas": "22:00",
+      "turnos": { "2026-11-13": "09:30-16:00 · almuerzo 30 min", "2026-11-14": "19:30-04:00 · almuerzo 30 min", "2026-11-15": "17:30-02:00 · almuerzo 30 min" } },
+    { "id": "e5", "codigo": "TE-05", "nombre": "SOFIA MORA", "cargo": "Empleado TC", "tipo_jornada": "Tiempo completo", "responsable_de_turno": false, "jornada_referencia_h": 42, "horas_programadas": "32:00",
+      "turnos": { "2026-11-09": "09:30-18:00 · almuerzo 30 min", "2026-11-10": "09:30-18:00 · almuerzo 30 min", "2026-11-11": "09:30-18:00 · almuerzo 30 min", "2026-11-12": "11:00-19:30 · almuerzo 30 min", "2026-11-13": "descanso" } }
+  ],
+  "novedades": [ "ANA GOMEZ: vacaciones 2026-11-09→2026-11-15 (registrada)", "PEDRO DIAZ: incapacidad 2026-11-09→2026-11-12 (registrada)" ],
+  "franjas_sin_responsable": [ "2026-11-10 08:00-13:30" ],
+  "advertencias": [ "SOFIA MORA: 4 días de turno; su tipo prevé 6." ]
+}

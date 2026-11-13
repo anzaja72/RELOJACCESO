@@ -404,3 +404,29 @@ describe("Acciones con la identidad del usuario", () => {
     await c.close();
   });
 });
+
+describe("Vista compacta del cronograma", () => {
+  test("la nota del turno viaja con él (turno partido)", async () => {
+    const { compactPlan } = await import("../tools.mjs");
+    const view = compactPlan({
+      site: { id: "s", code: "AP", name: "Alto Prado", city: "Barranquilla" },
+      weekStart: "2026-11-16",
+      dates: ["2026-11-16"],
+      opensHm: "08:00",
+      closesHm: "04:00",
+      hoursConfirmed: true,
+      plan: null,
+      approved: null,
+      versions: [],
+      employees: [{ id: "e", code: "AP-06", name: "X", role: "", typeName: "TC", isLead: false, weeklyHours: 42, missing: [], awayDates: [] }],
+      totals: { e: 420 },
+      cells: [
+        { employeeId: "e", date: "2026-11-16", kind: "turno", startHm: "12:30", endHm: "21:00", lunchMin: 90, note: "partido 12:30-14:00 / 15:30-21:00" },
+      ],
+      novelties: [],
+      coverage: [],
+      warnings: [],
+    });
+    assert.equal(view.empleados[0].turnos["2026-11-16"], "12:30-21:00 · almuerzo 90 min · partido 12:30-14:00 / 15:30-21:00");
+  });
+});
