@@ -4,14 +4,17 @@
 //   Simulación (no escribe nada):
 //     BASE=https://reloj.leia-softwarelab.tech PASSWORD='…' node scripts/importar-empleados.mjs \
 //       --usuario rrhh@empresa.co --archivo trabajadores.csv --tienda AP-31760
-//   Aplicar:  agregue --aplicar
+//   Aplicar:  agregue --aplicar  (pide escribir SI para confirmar; --si lo omite)
+//   Pasar a una tienda a personas ya cargadas en otra: --mover
 //   Crear la tienda si no existe (solo superadmin):
 //       --crear-tienda --nombre-tienda "Alto Prado Norte" --ciudad Barranquilla --region zone_caribe
 //
 // CSV (UTF-8, con encabezado): codigo,cedula,nombre,cargo,tipo_jornada
+//   · --tienda se busca SOLO por id, código o nombre completo (nunca por parte del nombre).
 //   · tipo_jornada debe coincidir con el nombre de un tipo de jornada de Reloj (ver /people › Tipos de jornada).
 // La contraseña va SIEMPRE en el entorno (PASSWORD). Las cédulas se muestran enmascaradas.
 import { readFileSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
 /* ───────── CSV ───────── */
@@ -78,6 +81,17 @@ export function validateRows(raw, typeByName) {
   return { rows, errors };
 }
 
+const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/**
+ * Busca una tienda por id, código o NOMBRE COMPLETO (sin tildes ni mayúsculas). Nunca por una parte del
+ * nombre: «AP» no puede coincidir con «Café Central CHAPinero».
+ */
+export function findSite(sites, text) {
+  const wanted = norm(text);
+  return sites.find((s) => norm(s.id) === wanted || norm(s.code) === wanted || norm(s.name) === wanted);
+}
+
 const mask = (ced) => `${"•".repeat(Math.max(0, ced.length - 3))}${ced.slice(-3)}`;
 
 /* ───────── Programa ───────── */
@@ -131,13 +145,10 @@ async function main() {
   }
   console.log(`Archivo: ${rows.length} trabajadores válidos`);
 
-  // Tienda
+  // Tienda: solo coincidencia EXACTA (id, código o nombre completo)
   const sites = (await call("GET", "sites", token)).data.sites ?? [];
-  const wanted = tienda.toLowerCase();
-  // Por id, por código o por parte del nombre (si es única): --tienda "Alto Prado"
-  const byName = sites.filter((s) => s.name.toLowerCase().includes(wanted));
-  let site = sites.find((s) => s.id.toLowerCase() === wanted || s.code.toLowerCase() === wanted) ?? (byName.length === 1 ? byName[0] : undefined);
-  if (!site && byName.length > 1) fail(`«${tienda}» coincide con varias tiendas: ${byName.map((s) => `${s.name} (${s.code})`).join("; ")}. Use el código.`);
+  const site = findSite(sites, tienda);
+  let nueva = null;
   if (!site) {
     if (!flag("crear-tienda")) {
       console.error(`✗ No encontré la tienda «${tienda}». Tiendas que este usuario puede ver:`);
@@ -150,55 +161,88 @@ async function main() {
     const ciudad = arg("ciudad");
     const region = arg("region");
     if (!nombreTienda || !ciudad || !region) fail("Para crear la tienda indique --nombre-tienda, --ciudad y --region (id de región, ej. zone_caribe).");
-    if (!aplicar) console.log(`  · se crearía la tienda ${tienda} «${nombreTienda}» (${ciudad}, ${region})`);
-    else {
-      const created = await call("POST", "sites", token, { code: tienda.toUpperCase(), name: nombreTienda, city: ciudad, zoneId: region });
-      if (created.status !== 201) fail(`No se pudo crear la tienda (${created.status}): ${created.data.error ?? ""}`);
-      site = created.data.site;
-      console.log(`  ✓ tienda creada: ${site.name} (${site.code})`);
-    }
+    nueva = { code: tienda.toUpperCase(), name: nombreTienda, city: ciudad, zoneId: region };
+    console.log(`Tienda NUEVA (se creará): ${nueva.name} (${nueva.code}, ${nueva.city}, ${nueva.zoneId})`);
   } else {
     console.log(`Tienda: ${site.name} (${site.code}, ${site.city})`);
   }
+  const destino = site ? `${site.name} (${site.code})` : `${nueva.name} (${nueva.code}) [NUEVA]`;
+  const siteName = (id) => sites.find((s) => s.id === id)?.name ?? id;
 
-  // Quién ya existe (por cédula o por código dentro de la tienda)
+  // Qué haría con cada persona
   const existing = (await call("GET", "employees", token, undefined)).data.employees ?? [];
-  const docs = new Set(existing.filter((e) => e.documentId).map((e) => e.documentId));
-  const codes = new Set(existing.filter((e) => site && e.siteId === site.id).map((e) => e.code.toUpperCase()));
+  const byDoc = new Map(existing.filter((e) => e.documentId).map((e) => [e.documentId, e]));
+  const codesHere = new Set(existing.filter((e) => site && e.siteId === site.id).map((e) => e.code.toUpperCase()));
+  const plan = rows.map((r) => {
+    const prev = byDoc.get(r.cedula);
+    if (prev) {
+      if (site && prev.siteId === site.id) return { r, action: "omitir", note: "ya está en esta tienda" };
+      return { r, prev, action: flag("mover") ? "mover" : "otra-tienda" };
+    }
+    if (codesHere.has(r.codigo)) return { r, action: "omitir", note: "el código ya existe en esta tienda" };
+    return { r, action: "crear" };
+  });
 
-  const counts = { creados: 0, omitidos: 0, errores: 0 };
   console.log("");
-  for (const r of rows) {
+  for (const { r, action, prev, note } of plan) {
     const label = `${r.codigo.padEnd(7)} ${mask(r.cedula).padEnd(12)} ${r.nombre.padEnd(38)} ${r.tipoNombre}`;
-    if (docs.has(r.cedula) || (site && codes.has(r.codigo))) {
-      console.log(`  = ya existe   ${label}`);
+    const marca = { crear: "+ se crearía ", mover: "→ se movería ", omitir: "= se omite   ", "otra-tienda": "⚠ OTRA TIENDA" }[action];
+    console.log(`  ${marca} ${label}${action === "mover" || action === "otra-tienda" ? `  (hoy en «${siteName(prev.siteId)}»)` : ""}${note ? `  (${note})` : ""}`);
+  }
+  const n = (a) => plan.filter((p) => p.action === a).length;
+  console.log(`\nPlan: ${n("crear")} por crear · ${n("mover")} por mover · ${n("omitir")} se omiten · ${n("otra-tienda")} ya existen en OTRA tienda`);
+
+  if (!aplicar) {
+    if (n("otra-tienda")) console.log("⚠ Esas personas ya están cargadas en otra tienda. Para pasarlas a esta, agregue --mover.");
+    console.log("Simulación: no se escribió nada. Para ejecutarlo, repita el comando agregando --aplicar.");
+    return;
+  }
+  if (n("otra-tienda")) fail("Hay personas que ya existen en OTRA tienda (marcadas arriba). Si quiere pasarlas a esta, agregue --mover; si no, corrija el archivo.");
+
+  // Confirmación explícita antes de escribir
+  if (!flag("si")) {
+    if (!process.stdin.isTTY) fail("No hay terminal interactiva para confirmar. Agregue --si si está seguro.");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question(`\nVa a ESCRIBIR en ${BASE}: ${n("crear")} crear y ${n("mover")} mover, en «${destino}».\nEscriba SI para continuar: `);
+    rl.close();
+    if (answer.trim().toUpperCase() !== "SI") fail("Cancelado: no se escribió nada.");
+  }
+
+  let target = site;
+  if (nueva) {
+    const created = await call("POST", "sites", token, nueva);
+    if (created.status !== 201) fail(`No se pudo crear la tienda (${created.status}): ${created.data.error ?? ""}`);
+    target = created.data.site;
+    console.log(`  ✓ tienda creada: ${target.name} (${target.code})`);
+  }
+
+  const counts = { creados: 0, movidos: 0, omitidos: 0, errores: 0 };
+  for (const { r, action, prev } of plan) {
+    const label = `${r.codigo.padEnd(7)} ${mask(r.cedula).padEnd(12)} ${r.nombre.padEnd(38)} ${r.tipoNombre}`;
+    if (action === "omitir") {
+      console.log(`  = omitido     ${label}`);
       counts.omitidos += 1;
-      continue;
-    }
-    if (!aplicar || !site) {
-      console.log(`  + se crearía  ${label}`);
-      counts.creados += 1;
-      continue;
-    }
-    const res = await call("POST", "employees", token, {
-      name: r.nombre,
-      code: r.codigo,
-      siteId: site.id,
-      role: r.cargo,
-      documentId: r.cedula,
-      employeeTypeId: r.tipoId,
-      employmentStatus: "activo",
-    });
-    if (res.status === 201) {
-      console.log(`  ✓ creado      ${label}`);
-      counts.creados += 1;
+    } else if (action === "mover") {
+      const res = await call("PATCH", `employees/${prev.id}`, token, { siteId: target.id });
+      if (res.status === 200) {
+        console.log(`  → movido      ${label}`);
+        counts.movidos += 1;
+      } else {
+        console.log(`  ✗ ERROR       ${label} — ${res.data.error ?? res.status}`);
+        counts.errores += 1;
+      }
     } else {
-      console.log(`  ✗ ERROR       ${label} — ${res.data.error ?? res.status}`);
-      counts.errores += 1;
+      const res = await call("POST", "employees", token, { name: r.nombre, code: r.codigo, siteId: target.id, role: r.cargo, documentId: r.cedula, employeeTypeId: r.tipoId, employmentStatus: "activo" });
+      if (res.status === 201) {
+        console.log(`  ✓ creado      ${label}`);
+        counts.creados += 1;
+      } else {
+        console.log(`  ✗ ERROR       ${label} — ${res.data.error ?? res.status}`);
+        counts.errores += 1;
+      }
     }
   }
-  console.log(`\n${aplicar ? "Resultado" : "Resumen de la simulación"}: ${counts.creados} ${aplicar ? "creados" : "por crear"} · ${counts.omitidos} ya existían · ${counts.errores} con error`);
-  if (!aplicar) console.log("Para cargarlos de verdad, repita el comando agregando --aplicar.");
+  console.log(`\nResultado en «${target.name}»: ${counts.creados} creados · ${counts.movidos} movidos · ${counts.omitidos} omitidos · ${counts.errores} con error`);
   process.exit(counts.errores ? 2 : 0);
 }
 

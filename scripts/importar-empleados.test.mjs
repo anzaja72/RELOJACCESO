@@ -46,3 +46,21 @@ test("validateRows reporta cada problema con su número de fila y no deja pasar 
   assert.match(errors.join("\n"), /cédula repetida/);
   assert.match(errors.at(-1), /fila 7: código inválido; nombre vacío/);
 });
+
+test("findSite: solo coincidencia exacta de id, código o nombre completo (nunca parcial)", async () => {
+  const { findSite } = await import("./importar-empleados.mjs");
+  const sites = [
+    { id: "site_r03", code: "R03", name: "Café Central Chapinero" },
+    { id: "site_r06", code: "R06", name: "Los Milagros" },
+    { id: "site_ap", code: "AP", name: "Alto Prado" },
+  ];
+  assert.equal(findSite(sites, "AP").id, "site_ap");
+  assert.equal(findSite(sites, "ap").id, "site_ap");
+  assert.equal(findSite(sites, "site_r06").code, "R06");
+  assert.equal(findSite(sites, "alto prado").code, "AP");
+  assert.equal(findSite(sites, "CAFE CENTRAL CHAPINERO").code, "R03", "sin tildes ni mayúsculas, pero nombre completo");
+  // El error real: «AP» no existía y coincidía por dentro con «Café Central CHAPinero».
+  assert.equal(findSite(sites.filter((s) => s.code !== "AP"), "AP"), undefined);
+  assert.equal(findSite(sites, "Alto"), undefined);
+  assert.equal(findSite(sites, "Milagros"), undefined);
+});
