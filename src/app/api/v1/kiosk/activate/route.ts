@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const limited = rateLimit(request, 10);
   if (limited) return limited;
   try {
-    const body = await parseJson<{ tienda?: string; password?: string; label?: string }>(request);
+    const body = await parseJson<{ tienda?: string; password?: string; label?: string; terminalId?: string }>(request);
     if (!body.tienda || !body.password) return badRequest("Tienda y contraseña son obligatorias", { code: "VALIDATION" }, request);
     const wanted = norm(body.tienda);
     const site = listSites().find((s) => norm(s.code) === wanted || norm(s.name) === wanted);
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       label: body.label?.slice(0, 60) || `Kiosco ${site.code}`,
       userAgent: request.headers.get("user-agent") || "unknown",
       activatedBy: user.email,
+      previousId: typeof body.terminalId === "string" ? body.terminalId.slice(0, 64) : undefined,
     });
     const token = signTerminalToken({ terminalId: terminal.terminalId, siteId: terminal.site.id, tokenId: terminal.tokenId });
     return json({ token, terminalId: terminal.terminalId, site: terminal.site, expiresHours: TERMINAL_TOKEN_HOURS }, 201, request);

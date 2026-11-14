@@ -590,7 +590,7 @@ async function handlePost(request: Request, parts: string[]) {
     const actor = requireWrite(request);
     if (isResponse(actor)) return actor;
     try {
-      const body = await parseJson<{ siteId?: string; label?: string }>(request);
+      const body = await parseJson<{ siteId?: string; label?: string; terminalId?: string }>(request);
       if (!body.siteId) return badRequest("siteId es obligatorio", { code: "VALIDATION" }, request);
       const allowed = listSitesScoped(scopeOf(actor));
       if (!allowed.some((s) => s.id === body.siteId || s.code === body.siteId)) {
@@ -601,6 +601,7 @@ async function handlePost(request: Request, parts: string[]) {
         label: body.label,
         userAgent: request.headers.get("user-agent") || "unknown",
         activatedBy: actor.email,
+        previousId: typeof body.terminalId === "string" ? body.terminalId.slice(0, 64) : undefined,
       });
       const token = signTerminalToken({
         terminalId: terminal.terminalId,

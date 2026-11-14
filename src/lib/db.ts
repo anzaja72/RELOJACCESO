@@ -1146,12 +1146,28 @@ export function activateTerminal(input: {
   label?: string;
   userAgent: string;
   activatedBy: string;
+  /** Id que este navegador ya tenía: si es de la misma sede se reactiva esa tablet en vez de crear otra. */
+  previousId?: string;
 }) {
   const site = getSiteByCode(input.siteId);
   if (!site) throw new Error("Sede no encontrada");
-  const terminalId = ulid();
   const tokenId = ulid();
   const db = getDb();
+  if (input.previousId) {
+    // Token nuevo sobre la misma tablet: el anterior deja de servir y no se acumulan tablets duplicadas.
+    const reused = db
+      .prepare(
+        `UPDATE terminals SET token_id = ?, revoked_at = NULL, activated_by = ?, last_seen = ?, user_agent = ?, path = '/kiosk',
+                label = COALESCE(NULLIF(?, ''), label)
+          WHERE id = ? AND site_id = ?`,
+      )
+      .run(tokenId, input.activatedBy, new Date().toISOString(), input.userAgent, input.label?.trim() ?? "", input.previousId, site.id);
+    if (reused.changes) {
+      recordEvent(db, "terminal.reactivated", { terminalId: input.previousId, siteId: site.id, by: input.activatedBy });
+      return { terminalId: input.previousId, tokenId, site };
+    }
+  }
+  const terminalId = ulid();
   db.prepare(
     `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path, token_id, activated_by)
      VALUES (?, ?, ?, ?, ?, '/kiosk', ?, ?)`,

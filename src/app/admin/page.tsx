@@ -64,7 +64,7 @@ export default function AdminPage() {
         if (cancelled) return;
         setRows(data.rows);
         setPunches(data.punches);
-        setTerminals(data.terminals.filter((t) => t.siteId === siteId || !siteId));
+        setTerminals(data.terminals.filter((t) => !t.revoked && (t.siteId === siteId || !siteId)));
         setSelectedId((id) => id ?? data.punches[0]?.id ?? null);
         setError(null);
         setLoading(false);

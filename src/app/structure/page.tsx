@@ -61,7 +61,8 @@ export default function StructurePage() {
 
   const user = typeof window === "undefined" ? null : getSessionUser();
   const countOf = (siteId: string) => data?.employees.filter((e) => e.siteId === siteId).length ?? 0;
-  const tabletsOf = (siteId: string) => data?.terminals.filter((t) => t.siteId === siteId) ?? [];
+  // Las revocadas ya no pueden marcar: no se muestran ni cuentan.
+  const tabletsOf = (siteId: string) => data?.terminals.filter((t) => t.siteId === siteId && !t.revoked) ?? [];
 
   return (
     <AppShell title="Estructura" meta="Países, regiones, sedes y tablets que usted puede ver">

@@ -1,6 +1,6 @@
 import type { Widget } from "@/lib/ai-widgets";
 import { clearSession, getToken } from "@/lib/client-session";
-import { clearTerminal, getTerminal } from "@/lib/terminal";
+import { clearTerminal, getTerminal, getTerminalId } from "@/lib/terminal";
 import type {
   AttendanceRow,
   Employee,
@@ -206,16 +206,17 @@ export const api = {
       "/api/v1/auth/login",
       { method: "POST", body: JSON.stringify(body) },
     ),
+  // Ambas activaciones envían el id que este navegador ya tenía, para reactivar la misma tablet y no crear otra.
   activateTerminal: (body: { siteId: string; label?: string }, token: string) =>
     request<{ token: string; terminalId: string; site: Site }>("/api/v1/terminals/activate", {
       method: "POST",
       token,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, terminalId: getTerminalId() || undefined }),
     }),
   kioskActivate: (body: { tienda: string; password: string }) =>
     request<{ token: string; terminalId: string; site: Site }>("/api/v1/kiosk/activate", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, terminalId: getTerminalId() || undefined }),
     }),
   me: () => request<{ user: { email: string; name: string; role: string } }>("/api/v1/auth/me", { admin: true }),
   reports: (qs: string) => request<Record<string, unknown>>(`/api/v1/reports?${qs}`, { admin: true }),
