@@ -1,5 +1,5 @@
 /**
- * Reactivar el kiosco desde el mismo navegador reutiliza la tablet: no se acumulan tablets duplicadas.
+ * Tablets: solo el superadmin las crea; activar en /kiosco solo ocupa una tablet ya creada y nunca crea otra.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -8,49 +8,69 @@ import path from "node:path";
 import { test } from "node:test";
 
 process.env.DATA_DIR = mkdtempSync(path.join(tmpdir(), "reloj-terminals-"));
-const { activateTerminal, getDb, listTerminals, revokeTerminal, terminalTokenActive } = await import("@/lib/db");
+const { activateTerminal, createTerminal, getDb, heartbeat, listTerminals, revokeTerminal, terminalTokenActive, TerminalUnavailableError } =
+  await import("@/lib/db");
 const { seedTiendas } = await import("../scripts/seed-tiendas.mjs");
 seedTiendas(getDb(), { password: "prueba-no-productiva-1" });
 
 const activar = (siteId, previousId) =>
   activateTerminal({ siteId, userAgent: "Android tablet", activatedBy: "kiosco@test", previousId });
-const deSede = (siteId) => listTerminals().filter((t) => t.siteId === siteId);
+const vigentes = (siteId) => listTerminals().filter((t) => t.siteId === siteId && !t.revoked);
+const sinTablet = (fn) => assert.throws(fn, (e) => e instanceof TerminalUnavailableError);
 
-test("la primera activación crea la tablet", () => {
+test("sin tablets creadas por el superadmin no se puede activar", () => {
+  sinTablet(() => activar("site_baq_bv"));
+  assert.equal(listTerminals().length, 0, "no se crea nada");
+});
+
+test("el latido nunca crea tablets", () => {
+  heartbeat({ id: "inventada", siteId: "site_baq_bv", userAgent: "x", path: "/kiosk" });
+  assert.equal(listTerminals().length, 0);
+});
+
+test("el superadmin crea una tablet, queda sin activar y el primer equipo la ocupa", () => {
+  const t = createTerminal({ siteId: "site_baq_bv", label: "Tablet caja", by: "admin@test" });
+  assert.equal(t.activated, false);
+  assert.equal(t.online, false);
   const a = activar("site_baq_bv");
-  assert.equal(deSede("site_baq_bv").length, 1);
-  assert.ok(terminalTokenActive(a.terminalId, a.tokenId));
+  assert.equal(a.terminalId, t.id);
+  assert.ok(terminalTokenActive(t.id, a.tokenId));
+  const [now] = vigentes("site_baq_bv");
+  assert.equal(now.activated, true);
+  assert.equal(now.label, "Tablet caja", "conserva el nombre que puso el superadmin");
 });
 
-test("reactivar con el id anterior reutiliza la tablet y cambia el token", () => {
-  const [prev] = deSede("site_baq_bv");
-  const first = getDb().prepare("SELECT token_id FROM terminals WHERE id = ?").get(prev.id).token_id;
-  const b = activar("site_baq_bv", prev.id);
-  assert.equal(b.terminalId, prev.id);
-  assert.equal(deSede("site_baq_bv").length, 1, "no se crea otra tablet");
-  assert.ok(terminalTokenActive(prev.id, b.tokenId), "el token nuevo sirve");
-  assert.ok(!terminalTokenActive(prev.id, first), "el token anterior deja de servir");
+test("con una sola tablet, activar en otro equipo la reemplaza y el anterior deja de marcar", () => {
+  const [t] = vigentes("site_baq_bv");
+  const before = getDb().prepare("SELECT token_id FROM terminals WHERE id = ?").get(t.id).token_id;
+  const b = activar("site_baq_bv"); // otro navegador: no conoce el id
+  assert.equal(b.terminalId, t.id);
+  assert.equal(listTerminals().filter((x) => x.siteId === "site_baq_bv").length, 1, "no se crea otra");
+  assert.ok(!terminalTokenActive(t.id, before), "el equipo anterior queda fuera");
+  assert.ok(terminalTokenActive(t.id, b.tokenId));
 });
 
-test("una tablet revocada vuelve a quedar vigente al reactivarla, sin duplicarse", () => {
-  const [prev] = deSede("site_baq_bv");
-  revokeTerminal(prev.id, "gerente@test");
-  assert.ok(deSede("site_baq_bv")[0].revoked);
-  const c = activar("site_baq_bv", prev.id);
-  assert.equal(c.terminalId, prev.id);
-  const [now] = deSede("site_baq_bv");
-  assert.ok(!now.revoked);
-  assert.ok(terminalTokenActive(prev.id, c.tokenId));
-  assert.equal(deSede("site_baq_bv").length, 1);
+test("con varias tablets en uso, un equipo nuevo no reemplaza ninguna; el que ya la tenía sí la recupera", () => {
+  const [uno] = vigentes("site_baq_bv");
+  createTerminal({ siteId: "site_baq_bv", by: "admin@test" });
+  const dos = activar("site_baq_bv"); // ocupa la nueva, que estaba libre
+  assert.notEqual(dos.terminalId, uno.id);
+  sinTablet(() => activar("site_baq_bv"));
+  assert.equal(activar("site_baq_bv", uno.id).terminalId, uno.id, "el navegador que la tenía la recupera");
+  assert.equal(vigentes("site_baq_bv").length, 2);
 });
 
-test("un id de otra tienda o inexistente crea una tablet nueva en la tienda pedida", () => {
-  const [bv] = deSede("site_baq_bv");
-  const ap = activar("site_baq_ap", bv.id);
-  assert.notEqual(ap.terminalId, bv.id, "no se mueve una tablet de Buenavista a Alto Prado");
-  assert.equal(deSede("site_baq_ap").length, 1);
-  assert.equal(deSede("site_baq_bv").length, 1);
-  const otra = activar("site_baq_ap", "no-existe");
-  assert.notEqual(otra.terminalId, "no-existe");
-  assert.equal(deSede("site_baq_ap").length, 2);
+test("una tablet revocada no se vuelve a activar, ni desde el equipo que la tenía", () => {
+  const [uno, dos] = vigentes("site_baq_bv");
+  revokeTerminal(uno.id, "gerente@test");
+  revokeTerminal(dos.id, "gerente@test");
+  sinTablet(() => activar("site_baq_bv", uno.id));
+  assert.equal(vigentes("site_baq_bv").length, 0);
+  assert.equal(listTerminals().filter((x) => x.siteId === "site_baq_bv").length, 2, "no se crean nuevas");
+});
+
+test("una tablet de otra tienda no se ocupa", () => {
+  const bv = createTerminal({ siteId: "site_baq_bv", by: "admin@test" });
+  sinTablet(() => activar("site_baq_ap", bv.id));
+  assert.equal(vigentes("site_baq_ap").length, 0);
 });

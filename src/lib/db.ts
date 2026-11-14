@@ -1110,78 +1110,90 @@ export function attendanceToday(siteId?: string): AttendanceRow[] {
   });
 }
 
+/**
+ * Latido de una tablet ya creada: solo actualiza su última señal. Nunca crea tablets
+ * (las crea el superadmin en Estructura) ni cambia el nombre que les puso.
+ */
 export function heartbeat(input: {
   id: string;
   siteId: string;
-  label?: string;
   userAgent: string;
   path: string;
 }) {
   const site = getSiteByCode(input.siteId);
   if (!site) throw new Error("Sede no encontrada");
-  const now = new Date().toISOString();
   getDb()
-    .prepare(
-      `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         label = excluded.label,
-         last_seen = excluded.last_seen,
-         user_agent = excluded.user_agent,
-         path = excluded.path
-       WHERE terminals.site_id = excluded.site_id`,
-    )
-    .run(
-      input.id,
-      site.id,
-      input.label || `Kiosco ${site.code}`,
-      now,
-      input.userAgent,
-      input.path,
-    );
+    .prepare("UPDATE terminals SET last_seen = ?, user_agent = ?, path = ? WHERE id = ? AND site_id = ? AND revoked_at IS NULL")
+    .run(new Date().toISOString(), input.userAgent, input.path, input.id, site.id);
 }
 
+/** Fecha de «último latido» de una tablet creada que todavía no se ha activado en ningún equipo. */
+const NEVER_SEEN = "1970-01-01T00:00:00.000Z";
+
+/** La tienda no tiene una tablet libre para este equipo: solo el superadmin puede agregar tablets. */
+export class TerminalUnavailableError extends Error {
+  code = "NO_TERMINAL";
+}
+
+/** Solo el superadmin: agrega una tablet a una tienda. Queda sin activar hasta que se abra /kiosco en el equipo. */
+export function createTerminal(input: { siteId: string; label?: string; by: string }) {
+  const site = getSiteByCode(input.siteId);
+  if (!site) throw new Error("Sede no encontrada");
+  const db = getDb();
+  const id = ulid();
+  const count = (db.prepare("SELECT COUNT(*) AS n FROM terminals WHERE site_id = ?").get(site.id) as { n: number }).n;
+  const label = input.label?.trim().slice(0, 60) || `Tablet ${site.code}${count ? ` ${count + 1}` : ""}`;
+  db.prepare(
+    `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path, token_id, activated_by)
+     VALUES (?, ?, ?, ?, '', '/kiosk', NULL, NULL)`,
+  ).run(id, site.id, label, NEVER_SEEN);
+  recordEvent(db, "terminal.created", { terminalId: id, siteId: site.id, label, by: input.by });
+  return listTerminals().find((t) => t.id === id)!;
+}
+
+/**
+ * Activa este equipo como una de las tablets que el superadmin creó para la tienda. Nunca crea tablets.
+ * Orden: la que este navegador ya tenía → una creada que aún no se ha activado → si la tienda tiene
+ * una sola tablet, esa (el equipo anterior deja de marcar). Las revocadas no se reutilizan.
+ */
 export function activateTerminal(input: {
   siteId: string;
   label?: string;
   userAgent: string;
   activatedBy: string;
-  /** Id que este navegador ya tenía: si es de la misma sede se reactiva esa tablet en vez de crear otra. */
+  /** Id que este navegador ya tenía. */
   previousId?: string;
 }) {
   const site = getSiteByCode(input.siteId);
   if (!site) throw new Error("Sede no encontrada");
-  const tokenId = ulid();
   const db = getDb();
-  if (input.previousId) {
-    // Token nuevo sobre la misma tablet: el anterior deja de servir y no se acumulan tablets duplicadas.
-    const reused = db
-      .prepare(
-        `UPDATE terminals SET token_id = ?, revoked_at = NULL, activated_by = ?, last_seen = ?, user_agent = ?, path = '/kiosk',
-                label = COALESCE(NULLIF(?, ''), label)
-          WHERE id = ? AND site_id = ?`,
-      )
-      .run(tokenId, input.activatedBy, new Date().toISOString(), input.userAgent, input.label?.trim() ?? "", input.previousId, site.id);
-    if (reused.changes) {
-      recordEvent(db, "terminal.reactivated", { terminalId: input.previousId, siteId: site.id, by: input.activatedBy });
-      return { terminalId: input.previousId, tokenId, site };
-    }
+  const live = db
+    .prepare("SELECT id, token_id FROM terminals WHERE site_id = ? AND revoked_at IS NULL ORDER BY rowid")
+    .all(site.id) as Array<{ id: string; token_id: string | null }>;
+  const target =
+    (input.previousId ? live.find((t) => t.id === input.previousId) : undefined) ??
+    live.find((t) => !t.token_id) ??
+    (live.length === 1 ? live[0] : undefined);
+  if (!target) {
+    throw new TerminalUnavailableError(
+      live.length
+        ? "Todas las tablets de esta tienda ya están en uso. Pida al administrador que agregue otra en Estructura."
+        : "Esta tienda no tiene tablets creadas. Pida al administrador que agregue una en Estructura.",
+    );
   }
-  const terminalId = ulid();
+  const tokenId = ulid();
   db.prepare(
-    `INSERT INTO terminals (id, site_id, label, last_seen, user_agent, path, token_id, activated_by)
-     VALUES (?, ?, ?, ?, ?, '/kiosk', ?, ?)`,
-  ).run(
-    terminalId,
-    site.id,
-    input.label?.trim() || `Kiosco ${site.code}`,
-    new Date().toISOString(),
-    input.userAgent,
-    tokenId,
-    input.activatedBy,
-  );
-  recordEvent(db, "terminal.activated", { terminalId, siteId: site.id, by: input.activatedBy });
-  return { terminalId, tokenId, site };
+    `UPDATE terminals SET token_id = ?, activated_by = ?, last_seen = ?, user_agent = ?, path = '/kiosk',
+            label = COALESCE(NULLIF(?, ''), label)
+      WHERE id = ?`,
+  ).run(tokenId, input.activatedBy, new Date().toISOString(), input.userAgent, input.label?.trim().slice(0, 60) ?? "", target.id);
+  recordEvent(db, "terminal.activated", {
+    terminalId: target.id,
+    siteId: site.id,
+    by: input.activatedBy,
+    replaced: Boolean(target.token_id),
+  });
+  return { terminalId: target.id, tokenId, site };
 }
 
 /** true si el token sigue siendo el vigente de esa terminal y no fue revocado. */
@@ -1215,6 +1227,7 @@ export function listTerminals(): Terminal[] {
     path: String(row.path),
     online: now - new Date(String(row.last_seen)).getTime() < TERMINAL_ONLINE_MS,
     revoked: Boolean(row.revoked_at),
+    activated: Boolean(row.token_id),
   }));
 }
 

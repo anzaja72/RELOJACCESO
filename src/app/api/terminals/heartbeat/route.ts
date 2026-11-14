@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const caller = requireKiosk(request);
   if (isKioskDenied(caller)) return caller;
+  // Solo una tablet activada envía latidos; con sesión de usuario no hay tablet que actualizar.
+  if (caller.kind !== "terminal") return json({ ok: true, ignored: true });
   try {
     const body = await parseJson<{
       id?: string;
@@ -25,7 +27,6 @@ export async function POST(request: Request) {
     heartbeat({
       id: body.id,
       siteId: body.siteId,
-      label: body.label,
       userAgent: body.userAgent || "unknown",
       path: body.path || "/kiosk",
     });

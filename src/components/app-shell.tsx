@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
-  Camera,
   FileText,
   Inbox,
   LayoutDashboard,
@@ -30,7 +29,6 @@ import { APP } from "@/lib/config";
 
 const links = [
   { href: "/", label: "Inicio", icon: Inbox },
-  { href: "/kiosk", label: "Kiosco", icon: Camera },
   { href: "/enroll", label: "Enrolar", icon: UserPlus },
   { href: "/admin", label: "Operación", icon: LayoutDashboard },
   { href: "/region", label: "Regional", icon: MapPinned },

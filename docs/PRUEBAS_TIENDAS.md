@@ -179,7 +179,7 @@ marcar --usuario buenavista@reloj.cr --empleado emp_bv_tc --tienda BAQ-BV --marc
 3. → El lunes muestra: Entrada 08:00 · Sale almuerzo 12:00 · Regresa 12:30 · Salida 16:30 · **Neto 8:00** · **Almuerzo 30′** · sin incidencias. «Programado» es 8:00 (requiere haber **aprobado el cronograma en P-05**; si no, dice «sin aprobado»).
 4. → La salida a almuerzo **no** se cuenta como fin de jornada.
 
-**Con cámara (opcional):** entre como `buenavista@reloj.cr` → **Kiosco** (`/kiosk?site=BAQ-BV`) → debajo de la cámara hay cuatro botones: **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**. Cada uno registra su evento directamente, sin preguntas.
+**Con cámara (opcional):** abra `/kiosco` y actívelo con la tienda «Buenavista» y la contraseña del usuario kiosco (la tienda debe tener una tablet creada por el superadmin en **Estructura**) → debajo de la cámara hay cuatro botones: **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**. Cada uno registra su evento directamente, sin preguntas.
 
 | Resultado | ☐ Pasó ☐ Falló ☐ Bloqueado | Evidencia / nota: |
 | --- | --- | --- |
@@ -332,7 +332,7 @@ marcar --usuario buenavista@reloj.cr --corregir <ID> --nueva-hora 08:10 --dia $(
 
 ### P-18 · Prueba con cámara real (opcional, requiere webcam)
 1. Como `buenavista@reloj.cr` → **Enrolar**: elija a «Camila Rojas», marque el consentimiento, capture 3 muestras y **Guardar**. (Lea el texto de consentimiento: debe citar la ley colombiana de datos personales.)
-2. **Kiosco** (`/kiosk?site=BAQ-BV`): pulse **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**, con pausas de al menos un minuto entre una y otra (hay una protección contra marcas repetidas de 45 s).
+2. En otra ventana, abra `/kiosco` y actívelo con la tienda «Buenavista» y la contraseña del usuario kiosco (Kiosco ya no está en el menú). Pulse **Entrada**, **Salida almuerzo**, **Entrada almuerzo** y **Salida**, con pausas de al menos un minuto entre una y otra (hay una protección contra marcas repetidas de 45 s).
 3. → Cada resultado muestra el nombre del evento, la fecha, la hora y la tienda. La tercera dice «Entrada almuerzo registrada».
 4. **Horas** muestra las cuatro marcas del día.
 
@@ -396,3 +396,13 @@ marcar --usuario buenavista@reloj.cr --corregir <ID> --nueva-hora 08:10 --dia $(
 - Si algo del sistema ya existía y no está en esta guía (Reportes, IAnálisis, Estructura, Auditoría completa), pruébelo solo si el responsable lo pide.
 - Lo que **no** debe encontrar, porque está fuera del alcance: cálculo de nómina o pago de horas extra por este ajuste, integración con un lector biométrico físico, bloqueo físico de una puerta.
 - Decisiones del cliente aún pendientes (por ejemplo, si el regional solo aprueba o también edita, o si la falta de cobertura bloquea la aprobación) están listadas en `docs/REQUERIMIENTOS_TIENDAS.md`; el sistema hoy **solo avisa**, no bloquea.
+
+### P-19 · Tablets: solo el superadmin las crea
+1. Como `coordinador@reloj.cr` o `buenavista@reloj.cr`: el menú **no** muestra **Kiosco** y en **Estructura** no aparece **Agregar tablet**.
+2. Como superadmin → **Estructura** → en Alto Prado, **Agregar tablet** con el nombre «Tablet prueba». → Aparece «sin activar».
+3. En una ventana de incógnito abra `/kiosco`, tienda «Alto Prado» y la contraseña del kiosco. → Se activa y en **Estructura** la tablet pasa a «en línea». La cantidad de tablets no cambia.
+4. En otra ventana de incógnito, active de nuevo Alto Prado. → Se activa sobre la **misma** tablet (sigue habiendo una) y la primera ventana vuelve a pedir activación a los pocos segundos.
+5. Como superadmin, **Revocar** «Tablet prueba». → Desaparece de la lista. Activar Alto Prado en `/kiosco` muestra «Esta tienda no tiene tablets creadas» (si no había otra).
+
+| Resultado | ☐ Pasó ☐ Falló ☐ Bloqueado | Evidencia / nota: |
+| --- | --- | --- |

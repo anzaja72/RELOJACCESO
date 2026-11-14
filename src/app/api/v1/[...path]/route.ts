@@ -61,6 +61,8 @@ import {
 } from "@/lib/db-ops";
 import {
   activateTerminal,
+  createTerminal,
+  TerminalUnavailableError,
   createEmployee,
   createSite,
   createZone,
@@ -584,18 +586,28 @@ async function handlePost(request: Request, parts: string[]) {
     );
   }
 
+  // Solo el superadmin agrega tablets a una tienda. Quedan sin activar hasta que se abra /kiosco en el equipo.
+  if (route === "terminals") {
+    const actor = requireSuperadmin(request);
+    if (isResponse(actor)) return actor;
+    const body = await parseJson<{ siteId?: string; label?: string }>(request);
+    if (!body.siteId) return badRequest("siteId es obligatorio", { code: "VALIDATION" }, request);
+    try {
+      return json({ terminal: createTerminal({ siteId: body.siteId, label: body.label, by: actor.email }) }, 201, request);
+    } catch (error) {
+      return badRequest(error instanceof Error ? error.message : "No se pudo crear", { code: "VALIDATION" }, request);
+    }
+  }
+
+  // Activación con usuario: solo el superadmin, y solo ocupa una tablet ya creada (las tiendas usan /kiosco).
   if (route === "terminals/activate") {
     const limited = rateLimit(request, 10);
     if (limited) return limited;
-    const actor = requireWrite(request);
+    const actor = requireSuperadmin(request);
     if (isResponse(actor)) return actor;
     try {
       const body = await parseJson<{ siteId?: string; label?: string; terminalId?: string }>(request);
       if (!body.siteId) return badRequest("siteId es obligatorio", { code: "VALIDATION" }, request);
-      const allowed = listSitesScoped(scopeOf(actor));
-      if (!allowed.some((s) => s.id === body.siteId || s.code === body.siteId)) {
-        return json({ error: "Sede fuera de su alcance", code: "FORBIDDEN" }, 403, request);
-      }
       const terminal = activateTerminal({
         siteId: body.siteId,
         label: body.label,
@@ -619,6 +631,7 @@ async function handlePost(request: Request, parts: string[]) {
         request,
       );
     } catch (error) {
+      if (error instanceof TerminalUnavailableError) return json({ error: error.message, code: error.code }, 409, request);
       return serverError(error, request);
     }
   }

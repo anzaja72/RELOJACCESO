@@ -20,7 +20,7 @@ type Data = {
 };
 
 // País → región → sede → tablets, solo con lo que el usuario puede ver. El superadmin también
-// crea y edita regiones y sedes; los gerentes pueden revocar las tablets de su alcance.
+// crea y edita regiones y sedes y es el único que agrega tablets; los gerentes pueden revocar las de su alcance.
 export default function StructurePage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,18 +101,52 @@ export default function StructurePage() {
                                   <span>
                                     {t.online ? "● " : "○ "}
                                     {t.label || t.id}
+                                    <span className="muted">
+                                      {t.activated === false
+                                        ? "sin activar: abra /kiosco en la tablet"
+                                        : t.online
+                                          ? "en línea"
+                                          : `última señal ${new Date(t.lastSeen).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}`}
+                                    </span>
                                   </span>
                                   {isApprover && (
                                     <button
                                       type="button"
                                       className="native-select shade"
-                                      onClick={() => void run(() => api.revokeTerminal(t.id), `Tablet ${t.label || t.id} revocada.`)}
+                                      onClick={() => {
+                                        const ok = window.confirm(
+                                          `¿Revocar «${t.label || t.id}»? Deja de marcar de inmediato y no se puede volver a activar: ` +
+                                            "para reemplazarla, el superadmin debe agregar otra tablet.",
+                                        );
+                                        if (ok) void run(() => api.revokeTerminal(t.id), `Tablet ${t.label || t.id} revocada.`);
+                                      }}
                                     >
                                       Revocar
                                     </button>
                                   )}
                                 </span>
                               ))}
+                              {isSuper && (
+                                <button
+                                  type="button"
+                                  className="native-select shade"
+                                  style={{ marginTop: 6 }}
+                                  onClick={() => {
+                                    const label = window.prompt(
+                                      `Nombre de la nueva tablet de ${site.name}:`,
+                                      `Tablet ${site.code}${tablets.length ? ` ${tablets.length + 1}` : ""}`,
+                                    );
+                                    if (label !== null) {
+                                      void run(
+                                        () => api.createTerminal({ siteId: site.id, label }),
+                                        `Tablet agregada a ${site.name}. Actívela abriendo /kiosco en el equipo con el usuario kiosco de la tienda.`,
+                                      );
+                                    }
+                                  }}
+                                >
+                                  Agregar tablet
+                                </button>
+                              )}
                               {isSuper && !isEditing && (
                                 <button
                                   type="button"
@@ -190,7 +224,9 @@ export default function StructurePage() {
           </ul>
           <p className="muted" style={{ marginTop: 12 }}>
             Personas, Operación, Reportes, Auditoría y las exportaciones solo muestran datos de estas sedes.
-            Las tablets se activan desde la pantalla Kiosco, en la propia tablet.
+            Solo el superadmin agrega tablets a una tienda. Cada tablet se activa abriendo /kiosco en el propio
+            equipo con el usuario kiosco de su tienda; si la tienda tiene una sola tablet y se activa en otro equipo,
+            el anterior deja de marcar.
           </p>
 
           {isSuper && data && (

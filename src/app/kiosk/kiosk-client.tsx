@@ -12,7 +12,6 @@ import { detectFace, livenessHint, loadFaceModels } from "@/lib/face";
 import { identifyFace, type GalleryEntry } from "@/lib/match";
 import { cacheGallery, enqueuePunch, flushQueue, listQueued, readGallery } from "@/lib/offline";
 import { getTerminal, getTerminalId, isStoreKiosk, type TerminalBinding } from "@/lib/terminal";
-import { KioskActivation } from "./kiosk-activation";
 import { KioskLogin } from "./kiosk-login";
 import type { PunchType, Site, SyncItem } from "@/lib/types";
 import { LOCALE, TIMEZONE } from "@/lib/config";
@@ -461,14 +460,11 @@ export function KioskClient() {
     }
   }
 
-  // Sin terminal activada no se monta la cámara ni se descarga la galería.
+  // Sin terminal activada no se monta la cámara ni se descarga la galería. Toda tablet se activa con el
+  // usuario kiosco de su tienda y solo puede ocupar una tablet que el superadmin creó en Estructura.
   if (!binding) {
     if (!bindingChecked) return null;
-    return standalone ? (
-      <KioskLogin onActivated={setBinding} />
-    ) : (
-      <KioskActivation initialSite={querySite} onActivated={setBinding} />
-    );
+    return <KioskLogin onActivated={setBinding} />;
   }
 
   return (

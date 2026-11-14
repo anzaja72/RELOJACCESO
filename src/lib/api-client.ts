@@ -206,13 +206,7 @@ export const api = {
       "/api/v1/auth/login",
       { method: "POST", body: JSON.stringify(body) },
     ),
-  // Ambas activaciones envían el id que este navegador ya tenía, para reactivar la misma tablet y no crear otra.
-  activateTerminal: (body: { siteId: string; label?: string }, token: string) =>
-    request<{ token: string; terminalId: string; site: Site }>("/api/v1/terminals/activate", {
-      method: "POST",
-      token,
-      body: JSON.stringify({ ...body, terminalId: getTerminalId() || undefined }),
-    }),
+  // Envía el id que este navegador ya tenía, para volver a ocupar la misma tablet.
   kioskActivate: (body: { tienda: string; password: string }) =>
     request<{ token: string; terminalId: string; site: Site }>("/api/v1/kiosk/activate", {
       method: "POST",
@@ -285,6 +279,8 @@ export const api = {
       admin: true,
       body: JSON.stringify(body),
     }),
+  createTerminal: (body: { siteId: string; label?: string }) =>
+    request<{ terminal: Terminal }>("/api/v1/terminals", { method: "POST", admin: true, body: JSON.stringify(body) }),
   revokeTerminal: (id: string) =>
     request<{ ok: boolean }>(`/api/v1/terminals/${encodeURIComponent(id)}/revoke`, { method: "POST", admin: true }),
   brand: () =>

@@ -397,7 +397,8 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
       <thead><tr><th>Acción</th><th>Kiosco</th><th>Coord.</th><th>Gerente</th><th>Regional</th><th>RR. HH.</th><th>Auditor</th><th>Superadmin</th></tr></thead>
       <tbody>
         <tr><td>Marcar en la tablet (los colaboradores)</td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td></tr>
-        <tr><td>Activar la tablet de su tienda</td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Agregar tablets a una tienda</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
+        <tr><td>Activar una tablet en /kiosco (con el usuario kiosco)</td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td></tr>
         <tr><td>Revocar una tablet</td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
         <tr><td>Enrolar rostros</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="n">—</span></td><td><span class="y">Sí</span></td></tr>
         <tr><td>Ver marcaciones y asistencia</td><td><span class="n">—</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="y">Sí</span></td><td><span class="v">Ver</span></td><td><span class="y">Sí</span></td></tr>
@@ -489,8 +490,10 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
   <details class="task" open>
     <summary>Activar la tablet <span class="when">Una sola vez</span></summary>
     <div class="body">
+      <div class="note info"><b>Antes de empezar</b>
+        El superadmin debe haber agregado la tablet a la tienda en <b>Estructura</b>. Si no lo ha hecho, al activar aparece «Esta tienda no tiene tablets creadas».</div>
       <ol class="steps">
-        <li>En la tablet, abra Chrome y vaya a <code>https://reloj.leia-softwarelab.tech/kiosco</code> (con «c» y en minúsculas).</li>
+        <li>En la tablet, abra Chrome y vaya a <code>https://reloj.leia-softwarelab.tech/kiosco</code> (con «c» y en minúsculas). Esta dirección no aparece en el menú de la app: escríbala.</li>
         <li>En <b>Tienda</b> escriba el código o el nombre: <code>AP</code> o <code>Alto Prado</code>.</li>
         <li>En <b>Contraseña del kiosco</b> escriba la contraseña que le entregó el administrador y pulse <span class="ui">Activar kiosco</span>.</li>
         <li>Cuando el navegador pregunte, pulse <span class="ui">Permitir</span> para usar la cámara.</li>
@@ -519,9 +522,13 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
   </details>
 
   <details class="task" open>
-    <summary>Tablet perdida o cambiada <span class="when">Cuando pase</span></summary>
+    <summary>Tablet dañada, perdida o cambiada <span class="when">Cuando pase</span></summary>
     <div class="body">
-      <p>El gerente de tienda o el regional entra a <b>Estructura</b>, busca las tablets de la tienda y pulsa <span class="ui">Revocar</span> en la que ya no se usa. Para activar una nueva se necesita otra vez la contraseña del kiosco.</p>
+      <ul>
+        <li><b>Cambiar de equipo en una tienda con una sola tablet:</b> active el equipo nuevo en <code>/kiosco</code> como siempre. Ocupa el lugar de la tablet anterior, que deja de marcar en ese momento. No se crea una tablet más.</li>
+        <li><b>Tienda con varias tablets:</b> un equipo nuevo solo se puede activar si hay una tablet libre. Si aparece «Todas las tablets de esta tienda ya están en uso», pida al superadmin que agregue otra.</li>
+        <li><b>Tablet perdida o robada:</b> el gerente de tienda o el regional entra a <b>Estructura</b> y pulsa <span class="ui">Revocar</span> en esa tablet. Revocar es definitivo: para reemplazarla, el superadmin agrega otra.</li>
+      </ul>
     </div>
   </details>
 
@@ -550,7 +557,6 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
     <div><b>Enrolar</b><small>Registrar el rostro de colaboradores nuevos o de quienes la tablet no reconoce.</small></div>
     <div><b>Operación</b><small>Marcaciones del día, anomalías abiertas y estado de las tablets.</small></div>
     <div><b>Reportes</b><small>Asistencia por día: presentes, tarde, ausentes, salida temprana, omisiones. Registrar excepciones del día.</small></div>
-    <div><b>Kiosco</b><small>Volver a activar la tablet si se desconfigura.</small></div>
   </div>
 
   <h4>Su rutina</h4>
@@ -559,7 +565,7 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
     <div class="body">
       <ol class="steps">
         <li>Verifique que la tablet esté encendida, en la pantalla de marcación y con <b>Modelos listos</b>. Arriba a la derecha debe decir <b>En línea</b>.</li>
-        <li>Si muestra la pantalla de activación, vuelva a activarla con el usuario kiosco de la tienda.</li>
+        <li>Si muestra la pantalla de activación, vuelva a activarla en <code>/kiosco</code> con el usuario kiosco de la tienda. Recupera su misma tablet; no se crea otra.</li>
         <li>En <b>Operación</b>, revise en <b>Terminales</b> que la tablet haya reportado señal reciente.</li>
       </ol>
     </div>
@@ -998,10 +1004,12 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
     <div class="body">
       <ol class="steps">
         <li>En <b>Estructura</b>, use <b>Nueva región</b> (nombre y país) y <b>Nueva sede</b> (código, nombre, ciudad y región).</li>
-        <li>En cada sede verá sus tablets activas y podrá revocarlas.</li>
+        <li>En cada sede verá sus tablets: <b>en línea</b>, con su <b>última señal</b>, o <b>sin activar</b>. Solo usted puede pulsar <span class="ui">Agregar tablet</span>: póngale un nombre (por ejemplo «Tablet caja») y luego actívela en el equipo abriendo <code>/kiosco</code> con el usuario kiosco de la tienda.</li>
+        <li>Agregue solo las tablets que la tienda de verdad usa: con una por tienda basta. Si un equipo se cambia, el nuevo ocupa el lugar del anterior sin crear otra.</li>
+        <li><span class="ui">Revocar</span> retira una tablet para siempre (pérdida o robo). Las revocadas no aparecen en la lista.</li>
         <li>Para usuarios nuevos (gerentes, coordinadores, kioscos), pida al técnico que los cree en el servidor con su perfil y su tienda o región.</li>
       </ol>
-      <figure class="shot"><a href="img/admin-estructura.jpg" target="_blank" rel="noopener"><img src="img/admin-estructura.jpg" width="1600" height="1054" alt="Estructura" loading="lazy"></a><figcaption><b>Estructura.</b> Regiones y sedes con sus tablets (y el botón <b>Revocar</b>). A la derecha, su alcance y los formularios <b>Nueva región</b> y <b>Nueva sede</b>.</figcaption></figure>
+      <figure class="shot"><a href="img/admin-estructura.jpg" target="_blank" rel="noopener"><img src="img/admin-estructura.jpg" width="1600" height="1054" alt="Estructura" loading="lazy"></a><figcaption><b>Estructura.</b> Regiones y sedes con sus tablets, su estado y los botones <b>Revocar</b> y <b>Agregar tablet</b>. A la derecha, su alcance y los formularios <b>Nueva región</b> y <b>Nueva sede</b>.</figcaption></figure>
     </div>
   </details>
   <details class="task" open>
@@ -1160,7 +1168,9 @@ footer { max-width: 960px; margin: 0 auto; padding: 24px; font-size: 13px; color
       <tbody>
         <tr><td>La tablet no reconoce a alguien</td><td>No está enrolado, mala luz o cambió mucho su aspecto</td><td>Marcar con PIN de supervisor y volver a enrolarlo</td></tr>
         <tr><td>La tablet dice «No se pudo abrir la cámara»</td><td>Se negó el permiso de cámara o se abrió en otro navegador</td><td>Abrirla en Chrome y permitir la cámara en la configuración del sitio</td></tr>
-        <tr><td>La tablet pide activarse otra vez</td><td>La revocaron o se borraron los datos del navegador</td><td>Activarla con el usuario kiosco de la tienda</td></tr>
+        <tr><td>La tablet pide activarse otra vez</td><td>Se borraron los datos del navegador, o se activó otro equipo en esa tienda</td><td>Activarla en <code>/kiosco</code> con el usuario kiosco de la tienda</td></tr>
+        <tr><td>«Esta tienda no tiene tablets creadas»</td><td>El superadmin no ha agregado la tablet, o la revocaron</td><td>Pedir al superadmin que use <b>Agregar tablet</b> en Estructura</td></tr>
+        <tr><td>«Todas las tablets de esta tienda ya están en uso»</td><td>La tienda tiene varias tablets y todas están activadas en otros equipos</td><td>Pedir al superadmin que agregue otra o revocar la que ya no se usa</td></tr>
         <tr><td>La página <code>/kiosco</code> da error</td><td>Se escribió con mayúscula o con «k»</td><td>Escribir exactamente <code>/kiosco</code></td></tr>
         <tr><td>«Credenciales inválidas»</td><td>Correo o contraseña con un error, o usuario desactivado</td><td>Revisar mayúsculas; si persiste, pedir al administrador</td></tr>
         <tr><td>«Demasiados intentos»</td><td>Varios intentos fallidos seguidos</td><td>Esperar un minuto e intentar de nuevo</td></tr>

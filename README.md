@@ -64,7 +64,9 @@ Next.js solo sirve `/_next` a orígenes permitidos. La config añade `127.0.0.1`
 | Vía | Uso |
 | --- | --- |
 | `POST /api/v1/auth/login` | JWT 12 h (UI admin). TOTP opcional: `POST /api/v1/auth/totp` |
-| `POST /api/v1/terminals/activate` | Token de kiosco (1 año, atado a una sede). Lo pide un operador o superior desde `/kiosk` |
+| `POST /api/v1/terminals` | Solo superadmin: agrega una tablet a una sede `{ siteId, label? }`; queda sin activar |
+| `POST /api/v1/kiosk/activate` | Token de kiosco (1 año, atado a una sede) con el usuario kiosco de la tienda, desde `/kiosco`. Solo ocupa una tablet ya creada: la que el navegador tenía, una sin activar o, si la sede tiene una sola, esa |
+| `POST /api/v1/terminals/activate` | Igual, con sesión de superadmin |
 | `X-API-Key` / `Bearer` | Solo integraciones servidor a servidor (`DEMO_API_KEY`). La UI no la usa |
 | `GET /api/v1/auth/oidc` | Stub: documenta el camino a un IdP empresarial |
 
@@ -82,7 +84,7 @@ PIN de supervisor: `SUPERVISOR_PIN` (en desarrollo, `2468`).
 
 ### Kiosco
 
-Cada tablet se activa una vez en `/kiosk`: un operador, gerente o admin elige la sede e ingresa sus credenciales (no quedan guardadas). El kiosco recibe un token de terminal que solo sirve para su sede: descargar la galería, marcar, sincronizar la cola offline y enviar heartbeat. Si se pierde la tablet: `POST /api/v1/terminals/{id}/revoke` (gerente de sede o superior).
+Solo el superadmin agrega tablets a una sede (Estructura → **Agregar tablet**). Cada tablet se activa en el propio equipo abriendo `/kiosco` con el usuario kiosco de la tienda; la activación nunca crea tablets nuevas. Kiosco no aparece en el menú de la app. El kiosco recibe un token de terminal que solo sirve para su sede: descargar la galería, marcar, sincronizar la cola offline y enviar heartbeat. Si se pierde la tablet: `POST /api/v1/terminals/{id}/revoke` (gerente de sede o superior).
 
 OIDC: configurar `OIDC_ISSUER` + `OIDC_CLIENT_ID` y mapear grupos a los cinco roles. El stub no inicia un flujo real.
 

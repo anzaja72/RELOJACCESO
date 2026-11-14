@@ -76,6 +76,8 @@ export type Terminal = {
   path: string;
   online: boolean;
   revoked?: boolean;
+  /** false: el superadmin la creó pero todavía no se ha activado en ningún equipo. */
+  activated?: boolean;
 };
 
 export type IdentifyResult = {

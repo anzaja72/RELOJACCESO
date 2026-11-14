@@ -57,17 +57,6 @@ export default function HomePage() {
 
   const modules: Module[] = [
     {
-      href: "/kiosk?site=R01",
-      badge: "Marcación",
-      title: "Kiosco de Entrada / Salida",
-      text: "Entrada, salida y respaldo PIN autorizado, con captura local y comparación biométrica en menos de 1 segundo.",
-      icon: Camera,
-      note: "Rostro o PIN de supervisor",
-      cta: "Abrir Kiosco",
-      primary: true,
-      tone: "red",
-    },
-    {
       href: "/enroll",
       badge: "Alta",
       title: "Enrolar",
@@ -126,10 +115,6 @@ export default function HomePage() {
             <i className="dot" />
             {online ? "Sistema en línea" : "Sin conexión · la cola offline guarda las marcas"}
           </span>
-          <Link href="/kiosk" className="cta-btn">
-            <Camera className="size-4" />
-            Marcar Asistencia
-          </Link>
         </>
       }
     >
